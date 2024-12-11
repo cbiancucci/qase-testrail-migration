@@ -105,6 +105,7 @@ class Attachments:
         )
 
     def import_all_attachments(self) -> Mappings:
+        self.logger.log('[Attachments] Importing all attachments')
         return self.mappings
         return asyncio.run(self.import_all_attachments_async())
 

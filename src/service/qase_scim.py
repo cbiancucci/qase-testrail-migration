@@ -13,7 +13,7 @@ class QaseScimService:
 
         self.client = QaseScimClient(
             base_url=self.config.get('qase.scim_host'),
-            token=self.config.get('qase.scim_token'), 
+            token=self.config.get('qase.scim_token'),
             ssl=bool(self.config.get('qase.ssl'))
         )
 
