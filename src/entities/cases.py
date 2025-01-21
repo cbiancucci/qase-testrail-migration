@@ -196,7 +196,20 @@ class Cases:
     # Done. Method validates if custom field value exists (skip)
     def _validate_custom_field_values(self, custom_field: dict, value: Union[str, List]) -> Optional[Union[str, list]]: 
         if len(custom_field['configs']) > 0 and 'options' in custom_field['configs'][0] and 'items' in custom_field['configs'][0]['options'] and len(custom_field['configs'][0]['options']['items']) > 0:
-            values = self.__split_values(custom_field['configs'][0]['options']['items'])
+            config = None
+            if 'context' in custom_field['configs'][0] and 'project_ids' in custom_field['configs'][0]['context']:
+                project_id = self.project['testrail_id']
+                for conf in custom_field['configs']:
+                    ids = conf['context']['project_ids']
+                    if project_id in ids:
+                        config = conf
+
+                if config is None:
+                    return None
+            else:
+                config = custom_field['configs'][0]
+
+            values = self.__split_values(config['options']['items'])
             if type(value) == str or type(value) == int:
                 if str(value) not in values.keys():
                     self.logger.log(f'[{self.project["code"]}][Tests] Custom field {custom_field["name"]} has invalid value {value}', 'warning')
@@ -205,7 +218,10 @@ class Cases:
                 filtered_values = []
                 for item in value:
                     if str(item) in values.keys():
-                        filtered_values.append(item)
+                        qase_values = custom_field['qase_values']
+                        for key, value in qase_values.items():
+                            if values[str(item)] == value:
+                                filtered_values.append(key)
                     else:
                         self.logger.log(f'[{self.project["code"]}][Tests] Custom field {custom_field["name"]} has invalid value {value}', 'warning')
                 if len(filtered_values) == 0:

@@ -159,16 +159,25 @@ class QaseService:
             data['default_value'] = self.__get_default_value(field)
         if (field['type_id'] == 12 or field['type_id'] == 6):
             if len(field['configs']) > 0:
-                values = self.__split_values(field['configs'][0]['options']['items'])
+                values_temp = {}
+                i = 0
+                for config in field['configs']:
+                    values = self.__split_values(config['options']['items'])
+                    for key, value in values.items():
+                        if value.strip() not in values_temp:
+                            i = i + 1
+                            values_temp[value.strip()] = i
+
+
                 field['qase_values'] = {}
-                for key, value in values.items():
+                for key, value in values_temp.items():
                     data['value'].append(
                         CustomFieldCreateValueInner(
-                            id=int(key)+1, # hack as in testrail ids can start from 0
-                            title=value,
+                            id=value,  # hack as in testrail ids can start from 0
+                            title=key,
                         ),
                     )
-                    field['qase_values'][int(key)+1] = value
+                    field['qase_values'][value] = key
             else:
                 self.logger.log('Error creating custom field: ' + field['label'] + '. No options found', 'warning')
         return data
@@ -336,8 +345,8 @@ class QaseService:
                         #if (result['defects']):
                             #self.defects.append({"case_id": result["case_id"],"defects": result['defects'],"run_id": qase_run_id})
 
-                        if result['created_by']:
-                            data['author_id'] = mappings.get_user_id(result['created_by'])
+                        # if result['created_by']:
+                        #     data['author_id'] = mappings.get_user_id(result['created_by'])
 
                         if 'custom_step_results' in result and result['custom_step_results']:
                             data['steps'] = self.prepare_result_steps(result['custom_step_results'], mappings.result_statuses)
