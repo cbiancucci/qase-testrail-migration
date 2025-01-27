@@ -272,7 +272,7 @@ class QaseService:
         api_instance = RunsApi(self.client)
 
         data = {
-            'start_time': datetime.fromtimestamp(run['created_on']).strftime('%Y-%m-%d %H:%M:%S'),
+            'start_time': datetime.fromtimestamp(run['created_on']).strftime('%Y-%m-%d') + ' 00:00:00',
             'author_id': run['author_id']
         }
 
@@ -356,14 +356,17 @@ class QaseService:
             if len(res) > 0:
                 api_results = ResultsApi(self.client)
                 self.logger.log(f'Sending {len(res)} results to Qase')
-                api_results.create_result_bulk(
-                        code=qase_code,
-                        id=int(qase_run_id),
-                        resultcreate_bulk=ResultcreateBulk(
-                            results=res
+                try:
+                    api_results.create_result_bulk(
+                            code=qase_code,
+                            id=int(qase_run_id),
+                            resultcreate_bulk=ResultcreateBulk(
+                                results=res
+                            )
                         )
-                    )
-                self.logger.log(f'{len(res)} results sent to Qase')
+                    self.logger.log(f'{len(res)} results sent to Qase')
+                except Exception as e:
+                    self.logger.log(f'Exception when calling ResultsApi->create_result_bulk: {e}', 'error')
         return
 
     def prepare_result_steps(self, steps, status_map) -> list:

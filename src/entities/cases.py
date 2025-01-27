@@ -164,7 +164,7 @@ class Cases:
                         if type(value) == str or type(value) == int:
                             data['custom_field'][str(custom_field['qase_id'])] = str(int(value)+1)
                         if type(value) == list:
-                            data['custom_field'][str(custom_field['qase_id'])] = ','.join(str(int(v)+1) for v in value)
+                            data['custom_field'][str(custom_field['qase_id'])] = ','.join(str(int(v)) for v in value)
                 else:
                     data['custom_field'][str(custom_field['qase_id'])] = str(self.attachments.check_and_replace_attachments(case[field_name], self.project['code']))
             if field_name[len('custom_'):] in self.mappings.step_fields and case[field_name]:
