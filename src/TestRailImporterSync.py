@@ -96,10 +96,10 @@ class TestRailImporterSync:
             ).import_cases(project)
 
             Runs(
-                self.qase_service, 
-                self.testrail_service, 
-                self.logger, 
-                self.mappings, 
+                self.qase_service,
+                self.testrail_service,
+                self.logger,
+                self.mappings,
                 self.config,
                 project
             ).import_runs()
