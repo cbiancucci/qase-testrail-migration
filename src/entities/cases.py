@@ -219,8 +219,9 @@ class Cases:
                 for item in value:
                     if str(item) in values.keys():
                         qase_values = custom_field['qase_values']
-                        for key, value in qase_values.items():
-                            if values[str(item)] == value:
+                        for key, v in qase_values.items():
+                            tv = values[str(item)]
+                            if tv.strip() == v:
                                 filtered_values.append(key)
                     else:
                         self.logger.log(f'[{self.project["code"]}][Tests] Custom field {custom_field["name"]} has invalid value {value}', 'warning')
