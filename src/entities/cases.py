@@ -116,18 +116,23 @@ class Cases:
             )
         )
     # Done
-    def _set_refs(self, case:dict, data: dict):
-        if self.mappings.refs_id and case['refs'] and self.config.get('tests.refs.enable'):
-            string = str(case['refs'])
-            url = str(self.config.get('refs.url'))
-            if string.startswith('http'):
-                data['custom_field'][str(self.mappings.refs_id)] = quote(string, safe="/:")
-            elif url != '':
-                if not url.endswith('/'):
-                    string = string + '/'
-                string = url + string
-                data['custom_field'][str(self.mappings.refs_id)] = quote(string, safe="/:")
+    def _set_refs(self, case: dict, data: dict) -> dict:
+        if not (self.mappings.refs_id and case.get('refs') and self.config.get('tests.refs.enable')):
+            return data
+
+        refs = [ref.strip() for ref in case['refs'].split(',')]
+        url = self.config.get('tests.refs.url').rstrip('/')
+
+        processed_refs = [self._get_ref(ref, url) for ref in refs]
+        data['custom_field'][str(self.mappings.refs_id)] = '\n'.join(processed_refs)
+
         return data
+
+    @staticmethod
+    def _get_ref(ref: str, url: str) -> str:
+        if ref.startswith('http'):
+            return quote(ref, safe="/:")
+        return quote(f"{url}/{ref}", safe="/:")
     
     async def _get_attachments_for_case(self, case: dict, data: dict) -> dict:
         self.logger.log(f'[{self.project["code"]}][Tests] Getting attachments for case {case["title"]}')

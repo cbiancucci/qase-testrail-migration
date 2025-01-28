@@ -105,19 +105,18 @@ class Fields:
         
     async def _create_refs_field(self, qase_custom_fields):
         if self.config.get('tests.refs.enable'):
-            field = None
             if qase_custom_fields and len(qase_custom_fields) > 0:
                 for qase_field in qase_custom_fields:
                     if qase_field.title == 'Refs':
                         self.logger.log('Refs field found')
                         self.mappings.refs_id = qase_field.id
             
-            if not self.mappings.refs_id and field is not None:
+            if not self.mappings.refs_id:
                 self.logger.log('[Fields] Refs field not found. Creating a new one')
                 data = {
                     'title': 'Refs',
                     'entity': 0, # 0 - case, 1 - run, 2 - defect,
-                    'type': 7,
+                    'type': 2,
                     'is_filterable': True,
                     'is_visible': True,
                     'is_required': False,
