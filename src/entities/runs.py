@@ -142,6 +142,7 @@ class Runs:
             self.mappings.stats.add_entity_count(self.project['code'], 'runs', 'qase')
             # Import results for the run
             await self._import_results_for_run(run, qase_run_id, cases_map)
+            await self.pools.tr(self.qase.complete_run, self.project['code'], qase_run_id)
         else:
             self.logger.log(f'[{self.project["code"]}][Runs] Failed to create a new run in Qase for TestRail run {run["name"]} [{run["id"]}]', 'error')
         return
