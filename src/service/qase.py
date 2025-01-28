@@ -339,8 +339,8 @@ class QaseService:
                         #if (result['defects']):
                             #self.defects.append({"case_id": result["case_id"],"defects": result['defects'],"run_id": qase_run_id})
 
-                        if result['created_by']:
-                            data['author_id'] = mappings.get_user_id(result['created_by'])
+                        # if result['created_by']:
+                        #     data['author_id'] = mappings.get_user_id(result['created_by'])
 
                         if 'custom_step_results' in result and result['custom_step_results']:
                             data['steps'] = self.prepare_result_steps(result['custom_step_results'], mappings.result_statuses)
@@ -350,13 +350,17 @@ class QaseService:
             if len(res) > 0:
                 api_results = ResultsApi(self.client)
                 self.logger.log(f'Sending {len(res)} results to Qase')
-                api_results.create_result_bulk(
+                try:
+                    api_results.create_result_bulk(
                         code=qase_code,
                         id=int(qase_run_id),
                         resultcreate_bulk=ResultcreateBulk(
                             results=res
                         )
                     )
+                    self.logger.log(f'{len(res)} results sent to Qase')
+                except Exception as e:
+                    self.logger.log(f'Exception when calling ResultsApi->create_result_bulk: {e}', 'error')
 
     def prepare_result_steps(self, steps, status_map) -> list:
         allowed_statuses = ['passed', 'failed', 'blocked', 'skipped']
