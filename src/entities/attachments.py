@@ -125,31 +125,41 @@ class Attachments:
 
     async def import_raw_attachment(self, attachment):
         self.logger.log(f'[Attachments] Importing attachment: {attachment["id"]}')
-        if len(attachment['project_id']) > 1:
-            self.logger.log(f'[Attachments] Attachment {attachment["id"]} is linked to multiple projects', 'warning')
-        if len(attachment['project_id']) > 0:
-            if attachment['project_id'][0] in self.mappings.project_map:
-                code = self.mappings.project_map[attachment['project_id'][0]]
-                try: 
-                    meta = self._get_attachment_meta(await self.pools.tr(self.testrail.get_attachment, attachment['id']))
-                except Exception as e:
-                    self.logger.log(f'[Attachments] Exception when calling TestRail->get_attachment: {e}', 'error')
-                    return
 
-                try:
-                    qase_attachment = await self.pools.qs(self.qase.upload_attachment, code, meta)
-                    if qase_attachment:
-                        self.mappings.attachments_map[attachment['id']] = qase_attachment
-                        self.logger.log(f'[Attachments] Attachment {attachment["id"]} imported')
-                        self.mappings.stats.add_attachment('qase')
-                    else:
-                        self.logger.log(f'[Attachments] Attachment {attachment["id"]} not imported', 'error')
-                except Exception as e:
-                    self.logger.log(f'[Attachments] Exception when calling Qase->upload_attachment: {e}', 'error')
-            else:
-                self.logger.log(f'[Attachments] Attachment {attachment["id"]} is not linked to any project', 'error')
-        else:
+        project_ids = attachment['project_id'] if isinstance(attachment['project_id'], list) else [
+            attachment['project_id']]
+
+        if not project_ids:
             self.logger.log(f'[Attachments] Attachment {attachment["id"]} is not linked to any project', 'warning')
+            return
+
+        if len(project_ids) > 1:
+            self.logger.log(f'[Attachments] Attachment {attachment["id"]} is linked to multiple projects', 'warning')
+
+        project_id = project_ids[0]
+
+        if project_id not in self.mappings.project_map:
+            self.logger.log(f'[Attachments] Attachment {attachment["id"]} is not linked to any project', 'error')
+            return
+
+        code = self.mappings.project_map[project_id]
+
+        try:
+            meta = self._get_attachment_meta(await self.pools.tr(self.testrail.get_attachment, attachment['id']))
+        except Exception as e:
+            self.logger.log(f'[Attachments] Exception when calling TestRail->get_attachment: {e}', 'error')
+            return
+
+        try:
+            qase_attachment = await self.pools.qs(self.qase.upload_attachment, code, meta)
+            if qase_attachment:
+                self.mappings.attachments_map[attachment['id']] = qase_attachment
+                self.logger.log(f'[Attachments] Attachment {attachment["id"]} imported')
+                self.mappings.stats.add_attachment('qase')
+            else:
+                self.logger.log(f'[Attachments] Attachment {attachment["id"]} not imported', 'error')
+        except Exception as e:
+            self.logger.log(f'[Attachments] Exception when calling Qase->upload_attachment: {e}', 'error')
 
     def _read_cache(self):
         return
