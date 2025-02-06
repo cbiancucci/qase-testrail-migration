@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 
 from ..service import QaseService, TestrailService
@@ -184,6 +185,40 @@ class Cases:
                 else:
                     data['custom_field'][str(custom_field['qase_id'])] = self.__format_links_as_markdown(str(
                         self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
+
+            if field_name[len('custom_'):] == 'testrail_bdd_scenario' and case[field_name] is not None:
+                steps = []
+                i = 1
+                try:
+                    parsed_data = json.loads(case[field_name])
+                except Exception as e:
+                    self.logger.log(
+                        f'[{self.project["code"]}][Tests] Case {case["title"]} has invalid step {case[field_name]}: {e}',
+                        'warning')
+                    continue
+                for step in parsed_data:
+                    if 'content' not in step:
+                        self.logger.log(f'[{self.project["code"]}][Tests] Case {case["title"]} has invalid step {step}',
+                                        'warning')
+                    else:
+                        action = self.attachments.check_and_replace_attachments(step['content'], self.project['code'])
+                        action = action.strip()
+
+                        if action == '' or action == ' ':
+                            action = 'No action'
+                        steps.append(
+                            TestStepCreate(
+                                action=self.__format_links_as_markdown(action),
+                                expected_result=None,
+                                position=i
+                            )
+                        )
+                        i += 1
+                else:
+                    self.logger.log(f'[{self.project["code"]}][Tests] Case {case["title"]} has invalid step {step}',
+                                    'warning')
+                data['steps'] = steps
+
             if field_name[len('custom_'):] in self.mappings.step_fields and case[field_name]:
                 steps = []
                 i = 1
