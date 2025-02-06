@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 from ..service import QaseService, TestrailService
 from ..support import Logger, Mappings, ConfigManager as Config, Pools
@@ -181,8 +182,8 @@ class Cases:
                             data['custom_field'][str(custom_field['qase_id'])] = ','.join(
                                 str(int(v) + 1) for v in value)
                 else:
-                    data['custom_field'][str(custom_field['qase_id'])] = str(
-                        self.attachments.check_and_replace_attachments(case[field_name], self.project['code']))
+                    data['custom_field'][str(custom_field['qase_id'])] = self.__format_links_as_markdown(str(
+                        self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
             if field_name[len('custom_'):] in self.mappings.step_fields and case[field_name]:
                 steps = []
                 i = 1
@@ -201,9 +202,9 @@ class Cases:
                             action = 'No action'
                         steps.append(
                             TestStepCreate(
-                                action=action,
-                                expected_result=expected,
-                                data=input_data,
+                                action=self.__format_links_as_markdown(action),
+                                expected_result=self.__format_links_as_markdown(expected),
+                                data=self.__format_links_as_markdown(input_data),
                                 position=i
                             )
                         )
@@ -286,3 +287,13 @@ class Cases:
                 self.mappings.milestones[code]:
             data['milestone_id'] = self.mappings.milestones[code][case['milestone_id']]
         return data
+
+    @staticmethod
+    def __format_links_as_markdown(text):
+        if text is None:
+            return None
+
+        url_pattern = re.compile(r'(?<!\])\b(http[s]?://[^\s]+)')
+        formatted_text = url_pattern.sub(r'[\1](\1)', text)
+
+        return formatted_text
