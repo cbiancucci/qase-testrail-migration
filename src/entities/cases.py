@@ -46,7 +46,8 @@ class Cases:
                 for suite in suites:
                     tg.create_task(self.import_cases_for_suite(suite['id']))
             else:
-                tg.create_task(self.import_cases_for_suite(None))  # Assuming None is a valid suite_id when suite_mode is not 3
+                tg.create_task(
+                    self.import_cases_for_suite(None))  # Assuming None is a valid suite_id when suite_mode is not 3
 
     async def import_cases_for_suite(self, suite_id):
         offset = 0
@@ -64,18 +65,22 @@ class Cases:
             cases = await self.pools.tr(self.testrail.get_cases, self.project['testrail_id'], suite_id, limit, offset)
             self.mappings.stats.add_entity_count(self.project['code'], 'cases', 'testrail', cases['size'])
             if cases:
-                self.logger.print_status('['+self.project['code']+'] Importing test cases', self.total, self.total+cases['size'], 1)
-                self.logger.log(f'[{self.project["code"]}][Tests] Importing {cases["size"]} cases from {offset} to {offset + limit} for suite {suite_id}')
+                self.logger.print_status('[' + self.project['code'] + '] Importing test cases', self.total,
+                                         self.total + cases['size'], 1)
+                self.logger.log(
+                    f'[{self.project["code"]}][Tests] Importing {cases["size"]} cases from {offset} to {offset + limit} for suite {suite_id}')
                 data = await self._prepare_cases(cases)
                 if data:
                     status = await self.pools.qs(self.qase.create_cases, self.project['code'], data)
                     if status:
                         self.mappings.stats.add_entity_count(self.project['code'], 'cases', 'qase', cases['size'])
                 self.total = self.total + cases['size']
-                self.logger.print_status('['+self.project['code']+'] Importing test cases', self.total, self.total, 1)
+                self.logger.print_status('[' + self.project['code'] + '] Importing test cases', self.total, self.total,
+                                         1)
             return cases['size']
         except Exception as e:
-            self.logger.log(f"[{self.project['code']}][Tests] Error processing cases for suite {suite_id}: {e}", 'error')
+            self.logger.log(f"[{self.project['code']}][Tests] Error processing cases for suite {suite_id}: {e}",
+                            'error')
             return 0
 
     async def _prepare_cases(self, cases: List) -> List:
@@ -115,6 +120,7 @@ class Cases:
                 **data
             )
         )
+
     # Done
     def _set_refs(self, case: dict, data: dict) -> dict:
         if not (self.mappings.refs_id and case.get('refs') and self.config.get('tests.refs.enable')):
@@ -133,15 +139,17 @@ class Cases:
         if ref.startswith('http'):
             return quote(ref, safe="/:")
         return quote(f"{url}/{ref}", safe="/:")
-    
+
     async def _get_attachments_for_case(self, case: dict, data: dict) -> dict:
         self.logger.log(f'[{self.project["code"]}][Tests] Getting attachments for case {case["title"]}')
         try:
             attachments = await self.pools.tr(self.testrail.get_attachments_case, case['id'])
         except Exception as e:
-            self.logger.log(f'[{self.project["code"]}][Tests] Failed to get attachments for case {case["title"]}: {e}', 'error')
+            self.logger.log(f'[{self.project["code"]}][Tests] Failed to get attachments for case {case["title"]}: {e}',
+                            'error')
             return data
-        self.logger.log(f'[{self.project["code"]}][Tests] Found {len(attachments["attachments"])} attachments for case {case["title"]}')
+        self.logger.log(
+            f'[{self.project["code"]}][Tests] Found {len(attachments["attachments"])} attachments for case {case["title"]}')
         for attachment in attachments['attachments']:
             try:
                 id = attachment['id']
@@ -150,36 +158,43 @@ class Cases:
                 if id in self.mappings.attachments_map:
                     data['attachments'].append(self.mappings.attachments_map[id]['hash'])
             except Exception as e:
-                self.logger.log(f'[{self.project["code"]}][Tests] Failed to get attachment for case {case["title"]}: {e}', 'error')
+                self.logger.log(
+                    f'[{self.project["code"]}][Tests] Failed to get attachment for case {case["title"]}: {e}', 'error')
         return data
-    
+
     # Done
     def _import_custom_fields_for_case(self, case: dict, data: dict) -> dict:
         for field_name in case:
-            if field_name.startswith('custom_') and field_name[len('custom_'):] in self.mappings.custom_fields and case[field_name]:
+            if field_name.startswith('custom_') and field_name[len('custom_'):] in self.mappings.custom_fields and case[
+                field_name]:
                 name = field_name[len('custom_'):]
                 custom_field = self.mappings.custom_fields[name]
                 # Importing step
-                
+
                 if custom_field['type_id'] in (6, 12):
                     # Importing dropdown and multiselect values
                     value = self._validate_custom_field_values(custom_field, case[field_name])
                     if value:
                         if type(value) == str or type(value) == int:
-                            data['custom_field'][str(custom_field['qase_id'])] = str(int(value)+1)
+                            data['custom_field'][str(custom_field['qase_id'])] = str(int(value) + 1)
                         if type(value) == list:
-                            data['custom_field'][str(custom_field['qase_id'])] = ','.join(str(int(v)+1) for v in value)
+                            data['custom_field'][str(custom_field['qase_id'])] = ','.join(
+                                str(int(v) + 1) for v in value)
                 else:
-                    data['custom_field'][str(custom_field['qase_id'])] = str(self.attachments.check_and_replace_attachments(case[field_name], self.project['code']))
+                    data['custom_field'][str(custom_field['qase_id'])] = str(
+                        self.attachments.check_and_replace_attachments(case[field_name], self.project['code']))
             if field_name[len('custom_'):] in self.mappings.step_fields and case[field_name]:
                 steps = []
                 i = 1
                 for step in case[field_name]:
                     action = self.attachments.check_and_replace_attachments(step['content'], self.project['code'])
                     expected = self.attachments.check_and_replace_attachments(step['expected'], self.project['code'])
+                    input_data = self.attachments.check_and_replace_attachments(step['additional_info'],
+                                                                                self.project['code'])
 
                     action = action.strip()
                     expected = expected.strip()
+                    input_data = input_data.strip()
 
                     if (action != '' or (action == '' and expected != '')):
                         if action == '' or action == ' ':
@@ -188,22 +203,27 @@ class Cases:
                             TestStepCreate(
                                 action=action,
                                 expected_result=expected,
+                                data=input_data,
                                 position=i
                             )
                         )
                         i += 1
                     else:
-                        self.logger.log(f'[{self.project["code"]}][Tests] Case {case["title"]} has invalid step {step}', 'warning')
+                        self.logger.log(f'[{self.project["code"]}][Tests] Case {case["title"]} has invalid step {step}',
+                                        'warning')
                 data['steps'] = steps
         return data
-    
+
     # Done. Method validates if custom field value exists (skip)
-    def _validate_custom_field_values(self, custom_field: dict, value: Union[str, List]) -> Optional[Union[str, list]]: 
-        if len(custom_field['configs']) > 0 and 'options' in custom_field['configs'][0] and 'items' in custom_field['configs'][0]['options'] and len(custom_field['configs'][0]['options']['items']) > 0:
+    def _validate_custom_field_values(self, custom_field: dict, value: Union[str, List]) -> Optional[Union[str, list]]:
+        if len(custom_field['configs']) > 0 and 'options' in custom_field['configs'][0] and 'items' in \
+                custom_field['configs'][0]['options'] and len(custom_field['configs'][0]['options']['items']) > 0:
             values = self.__split_values(custom_field['configs'][0]['options']['items'])
             if type(value) == str or type(value) == int:
                 if str(value) not in values.keys():
-                    self.logger.log(f'[{self.project["code"]}][Tests] Custom field {custom_field["name"]} has invalid value {value}', 'warning')
+                    self.logger.log(
+                        f'[{self.project["code"]}][Tests] Custom field {custom_field["name"]} has invalid value {value}',
+                        'warning')
                     return None
             elif type(value) == list:
                 filtered_values = []
@@ -211,14 +231,16 @@ class Cases:
                     if str(item) in values.keys():
                         filtered_values.append(item)
                     else:
-                        self.logger.log(f'[{self.project["code"]}][Tests] Custom field {custom_field["name"]} has invalid value {value}', 'warning')
+                        self.logger.log(
+                            f'[{self.project["code"]}][Tests] Custom field {custom_field["name"]} has invalid value {value}',
+                            'warning')
                 if len(filtered_values) == 0:
                     return None
                 else:
                     return filtered_values
             return value
         return None
-    
+
     def __split_values(self, string: str, delimiter: str = ',') -> dict:
         items = string.split('\n')  # split items into a list
         result = {}
@@ -227,37 +249,40 @@ class Cases:
                 key, value = item.split(delimiter)
                 result[key] = value
         return result
-    
+
     # Done
     def _set_priority(self, case: dict, data: dict) -> dict:
-        data['priority'] = self.mappings.priorities[case['priority_id']] if case['priority_id'] in self.mappings.priorities else 1
+        data['priority'] = self.mappings.priorities[case['priority_id']] if case[
+                                                                                'priority_id'] in self.mappings.priorities else 1
         return data
-    
+
     # Done
     def _set_type(self, case: dict, data: dict) -> dict:
         data['type'] = self.mappings.types[case['type_id']] if case['type_id'] in self.mappings.types else 1
         return data
-    
+
     def _set_status(self, case: dict, data: dict) -> dict:
         # Not used yet, as testrail doesn't return case statuses
         return data
-        data['status'] = self.mappings.case_statuses[case['status_id']] if case['status_id'] in self.mappings.case_statuses else 1
+        data['status'] = self.mappings.case_statuses[case['status_id']] if case[
+                                                                               'status_id'] in self.mappings.case_statuses else 1
         return data
-    
+
     # Done
     def _set_suite(self, case: dict, data: dict) -> dict:
-        suite_id = self._get_suite_id(section_id = case['section_id'])
+        suite_id = self._get_suite_id(section_id=case['section_id'])
         if (suite_id):
             data['suite_id'] = suite_id
         return data
-    
+
     # Done
     def _get_suite_id(self, section_id: Optional[int] = None) -> int:
         if (section_id and section_id in self.mappings.suites[self.project['code']]):
             return self.mappings.suites[self.project['code']][section_id]
         return None
-    
+
     def _set_milestone(self, case: dict, data: dict, code: str) -> dict:
-        if case['milestone_id'] and code in self.mappings.milestones and case['milestone_id'] in self.mappings.milestones[code]:
+        if case['milestone_id'] and code in self.mappings.milestones and case['milestone_id'] in \
+                self.mappings.milestones[code]:
             data['milestone_id'] = self.mappings.milestones[code][case['milestone_id']]
         return data
