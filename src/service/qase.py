@@ -294,6 +294,13 @@ class QaseService:
         except Exception as e:
             self.logger.log(f'Exception when calling RunsApi->create_run: {e}')
 
+    def complete_run(self, project_code, run_id):
+        api_instance = RunsApi(self.client)
+        try:
+            api_instance.complete_run(code=project_code, id=run_id)
+        except Exception as e:
+            self.logger.log(f'Exception when calling RunsApi->complete_run: {e}')
+
     def send_bulk_results(self, tr_run, results, qase_run_id, qase_code, mappings, cases_map):
         res = []
 
