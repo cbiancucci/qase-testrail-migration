@@ -38,24 +38,31 @@ class Attachments:
             if (attachments):
                 return self.replace_attachments(string=string, code = code)
         return str(string)
-    
+
     def check_and_replace_attachments_array(self, attachments: list, code: str) -> list:
         result = []
         for attachment in attachments:
-            if attachment:
-                attachment = re.sub(r'^E_', '', attachment)
-            if attachment and attachment not in self.mappings.attachments_map:
-                self.logger.log(f'[Attachments] Attachment {attachment} not found in attachments_map (array)', 'warning')
-                self.replace_failover(attachment, code)
-            if attachment and attachment in self.mappings.attachments_map and self.mappings.attachments_map[attachment] and 'hash' in self.mappings.attachments_map[attachment]:
-                result.append(self.mappings.attachments_map[attachment]['hash'])
+            try:
+                if attachment is None or isinstance(attachment, int):
+                    continue
+                if attachment:
+                    attachment = re.sub(r'^E_', '', str(attachment))
+                if attachment and attachment not in self.mappings.attachments_map:
+                    self.logger.log(f'[Attachments] Attachment {attachment} not found in attachments_map (array)',
+                                    'warning')
+                    self.replace_failover(attachment, code)
+                if attachment and attachment in self.mappings.attachments_map and self.mappings.attachments_map[
+                    attachment] and 'hash' in self.mappings.attachments_map[attachment]:
+                    result.append(self.mappings.attachments_map[attachment]['hash'])
+            except Exception as e:
+                self.logger.log(f'Error processing attachment {attachment}: {e}', 'error')
         return result
-    
+
     def check_attachments(self, string: str) -> List:
         if (string):
             return re.findall(r'index\.php\?/attachments/get/([a-f0-9-]+)', str(string))
         return []
-    
+
     def _get_attachment_meta(self, data: dict) -> dict:
         content = BytesIO(data.content)
         content.mime = data.headers.get('Content-Type', '')
@@ -83,7 +90,7 @@ class Attachments:
         except Exception as e:
             self.logger.log(f'[Attachments] Exception when replacing attachments in a string {string}: {e}', 'error')
         return string
-    
+
     def replace_failover(self, attachment_id, code: str):
         try:
             self.logger.log(f'[Attachments] Replacing attachment {attachment_id} in failover')
@@ -96,7 +103,7 @@ class Attachments:
                 self.logger.log(f'[Attachments] Attachment {attachment_id} not replaced in failover', 'error')
         except Exception as e:
             self.logger.log(f'[Attachments] Exception when calling Qase->upload_attachment in failover: {e}', 'error')
-    
+
     def replace_string(self, string, code, attachment_id):
         return re.sub(
             f'!\\[\\]\\(index\\.php\\?/attachments/get/{attachment_id}\\)',
