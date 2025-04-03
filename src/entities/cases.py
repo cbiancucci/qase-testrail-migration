@@ -289,7 +289,7 @@ class Cases:
     # Done
     def _set_priority(self, case: dict, data: dict) -> dict:
         data['priority'] = self.mappings.priorities[case['priority_id']] if case[
-                                                                                'priority_id'] in self.mappings.priorities else 1
+                                                                                'priority_id'] in self.mappings.priorities else self.mappings.default_priority
         return data
 
     # Done

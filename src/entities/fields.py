@@ -154,8 +154,15 @@ class Fields:
                 for option in field['options']:
                     qase_priorities.append(option)
 
+        default_priority = 1
+        for qase_priority in qase_priorities:
+            if qase_priority['title'].lower() == 'high':
+                default_priority = int(qase_priority['id'])
+                self.mappings.default_priority = default_priority
+                break
+
         for tr_priority in tr_priorities:
-            self.mappings.priorities[tr_priority['id']] = 1
+            self.mappings.priorities[tr_priority['id']] = default_priority
             for qase_priority in qase_priorities:
                 if tr_priority['name'].lower() == qase_priority['title'].lower():
                     self.mappings.priorities[tr_priority['id']] = int(qase_priority['id'])

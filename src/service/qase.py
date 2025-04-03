@@ -258,6 +258,7 @@ class QaseService:
             return api_response.status
         except ApiException as e:
             self.logger.log("Exception when calling CasesApi->bulk: %s\n" % e)
+            self.logger.log(f"Request payload: {cases}")
         return False
 
     def create_run(self, run: list, project_code: str, cases: list = [], milestone_id = None):
