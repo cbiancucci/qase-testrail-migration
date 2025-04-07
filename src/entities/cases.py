@@ -94,34 +94,41 @@ class Cases:
         return result
 
     async def _prepare_case(self, case, result):
-        data = {
-            'id': int(case['id']),
-            'title': case['title'],
-            'created_at': str(datetime.fromtimestamp(case['created_on'])),
-            'updated_at': str(datetime.fromtimestamp(case['updated_on'])),
-            'author_id': self.mappings.get_user_id(case['created_by']),
-            'steps': [],
-            'attachments': [],
-            'is_flaky': 0,
-            'custom_field': {},
-        }
+        try:
+            data = {
+                'id': int(case['id']),
+                'title': case['title'],
+                'created_at': str(datetime.fromtimestamp(case['created_on'])),
+                'updated_at': str(datetime.fromtimestamp(case['updated_on'])),
+                'author_id': self.mappings.get_user_id(case['created_by']),
+                'steps': [],
+                'attachments': [],
+                'is_flaky': 0,
+                'custom_field': {},
+            }
 
-        # import custom fields
-        data = self._import_custom_fields_for_case(case=case, data=data)
-        data = await self._get_attachments_for_case(case=case, data=data)
+            # import custom fields
+            data = self._import_custom_fields_for_case(case=case, data=data)
+            data = await self._get_attachments_for_case(case=case, data=data)
 
-        data = self._set_priority(case=case, data=data)
-        data = self._set_type(case=case, data=data)
-        data = self._set_status(case=case, data=data)
-        data = self._set_suite(case=case, data=data)
-        data = self._set_refs(case=case, data=data)
-        data = self._set_milestone(case=case, data=data, code=self.project['code'])
+            data = self._set_priority(case=case, data=data)
+            data = self._set_type(case=case, data=data)
+            data = self._set_status(case=case, data=data)
+            data = self._set_suite(case=case, data=data)
+            data = self._set_refs(case=case, data=data)
+            data = self._set_milestone(case=case, data=data, code=self.project['code'])
 
-        result.append(
-            TestCasebulkCasesInner(
-                **data
+            result.append(
+                TestCasebulkCasesInner(
+                    **data
+                )
             )
-        )
+
+            self.logger.log("Prepared test: " + data['title'] + " - " + str(data['suite_id']))
+        except Exception as e:
+            self.logger.log(f'[{self.project["code"]}][Tests] Failed to prepare case {case["title"]}: {e}', 'error')
+            self.logger.log(f'[{self.project["code"]}][Tests] Case: {case}',)
+            self.logger.log(f'[{self.project["code"]}][Tests] Data: {data}', )
 
     # Done
     def _set_refs(self, case: dict, data: dict) -> dict:
@@ -225,7 +232,7 @@ class Cases:
                 for step in case[field_name]:
                     action = self.attachments.check_and_replace_attachments(step['content'], self.project['code'])
                     expected = self.attachments.check_and_replace_attachments(step['expected'], self.project['code'])
-                    input_data = self.attachments.check_and_replace_attachments(step['additional_info'],
+                    input_data = self.attachments.check_and_replace_attachments(step.get('additional_info', ''),
                                                                                 self.project['code'])
 
                     action = action.strip()
