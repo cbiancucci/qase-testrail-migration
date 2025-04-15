@@ -335,7 +335,7 @@ class Cases:
         if text is None:
             return None
 
-        url_pattern = re.compile(r'(?<!\])\b(http[s]?://[^\s]+)')
+        url_pattern = re.compile(r'(?<!\]\()(?<!\])\b(http[s]?://[^\s]+)')
         formatted_text = url_pattern.sub(r'[\1](\1)', text)
 
         return formatted_text
