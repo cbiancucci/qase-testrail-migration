@@ -174,24 +174,24 @@ class Cases:
     # Done
     def _import_custom_fields_for_case(self, case: dict, data: dict) -> dict:
         for field_name in case:
-            if field_name.startswith('custom_') and field_name[len('custom_'):] in self.mappings.custom_fields and case[
-                field_name]:
-                name = field_name[len('custom_'):]
-                custom_field = self.mappings.custom_fields[name]
-                # Importing step
+            if field_name.startswith('custom_'):
+                normalized_name = self.__normalize_custom_field_name(field_name[len('custom_'):])
+                if normalized_name in self.mappings.custom_fields and case[field_name]:
+                    custom_field = self.mappings.custom_fields[normalized_name]
+                    # Importing step
 
-                if custom_field['type_id'] in (6, 12):
-                    # Importing dropdown and multiselect values
-                    value = self._validate_custom_field_values(custom_field, case[field_name])
-                    if value:
-                        if type(value) == str or type(value) == int:
-                            data['custom_field'][str(custom_field['qase_id'])] = str(int(value) + 1)
-                        if type(value) == list:
-                            data['custom_field'][str(custom_field['qase_id'])] = ','.join(
-                                str(int(v) + 1) for v in value)
-                else:
-                    data['custom_field'][str(custom_field['qase_id'])] = self.__format_links_as_markdown(str(
-                        self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
+                    if custom_field['type_id'] in (6, 12):
+                        # Importing dropdown and multiselect values
+                        value = self._validate_custom_field_values(custom_field, case[field_name])
+                        if value:
+                            if type(value) == str or type(value) == int:
+                                data['custom_field'][str(custom_field['qase_id'])] = str(int(value) + 1)
+                            if type(value) == list:
+                                data['custom_field'][str(custom_field['qase_id'])] = ','.join(
+                                    str(int(v) + 1) for v in value)
+                    else:
+                        data['custom_field'][str(custom_field['qase_id'])] = self.__format_links_as_markdown(str(
+                            self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
 
             if field_name[len('custom_'):] == 'testrail_bdd_scenario' and case[field_name] is not None:
                 steps = []
@@ -339,3 +339,18 @@ class Cases:
         formatted_text = url_pattern.sub(r'[\1](\1)', text)
 
         return formatted_text
+
+    def __normalize_custom_field_name(self, field_name: str) -> str:
+        """
+        Normalize custom field name by removing common prefixes.
+        Supports both 'case_numbers' and 'numbers' -> 'numbers'
+        """
+        # Remove common prefixes that might be added to field names
+        prefixes_to_remove = ['case_', 'test_', 'tr_']
+        
+        for prefix in prefixes_to_remove:
+            if field_name.startswith(prefix):
+                field_name = field_name[len(prefix):]
+                break
+        
+        return field_name
