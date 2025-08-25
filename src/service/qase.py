@@ -144,22 +144,35 @@ class QaseService:
             'is_visible': True,
             'is_required': False,
         }
-        if not field['configs'] or field['configs'][0]['context']['is_global']:
-            data['is_enabled_for_all_projects'] = True
-        else:
-            data['is_enabled_for_all_projects'] = False
-            if field['configs'][0]['context']['project_ids']:
-                data['projects_codes'] = []
-                for config in field['configs']:
-                    for id in config['context']['project_ids']:
-                        if id in mappings.project_map:
-                            data['projects_codes'].append(mappings.project_map[id])
-
-        if self.__get_default_value(field):
-            data['default_value'] = self.__get_default_value(field)
-        if field['type_id'] == 12 or field['type_id'] == 6:
-            if len(field['configs']) > 0:
-                values = self.__split_values(field['configs'][0]['options']['items'])
+        
+        # Handle project-specific configurations
+        if field.get('configs') and len(field['configs']) > 0:
+            config = field['configs'][0]  # Use the first (and only) config for this project
+            
+            # Set required flag based on project configuration
+            if config.get('options', {}).get('is_required'):
+                data['is_required'] = True
+            
+            # Set default value based on project configuration
+            if config.get('options', {}).get('default_value'):
+                data['default_value'] = config['options']['default_value']
+            
+            # Handle project scope
+            if config.get('context', {}).get('is_global', False):
+                data['is_enabled_for_all_projects'] = True
+                self.logger.log(f'[Qase] Creating global field: {field["label"]}')
+            else:
+                data['is_enabled_for_all_projects'] = False
+                if config['context'].get('project_ids'):
+                    data['projects_codes'] = []
+                    for project_id in config['context']['project_ids']:
+                        if project_id in mappings.project_map:
+                            data['projects_codes'].append(mappings.project_map[project_id])
+                    self.logger.log(f'[Qase] Creating project-specific field: {field["label"]} for projects: {data["projects_codes"]}')
+            
+            # Handle field values for selectbox, multiselect, radio types
+            if field['type_id'] in [12, 6] and config.get('options', {}).get('items'):
+                values = self.__split_values(config['options']['items'])
                 field['qase_values'] = {}
                 for key, value in values.items():
                     data['value'].append(
@@ -169,18 +182,15 @@ class QaseService:
                         ),
                     )
                     field['qase_values'][int(key)+1] = value
-            else:
-                self.logger.log('Error creating custom field: ' + field['label'] + '. No options found', 'warning')
+                self.logger.log(f'[Qase] Field {field["label"]} has {len(values)} values')
+        else:
+            # Fallback for fields without configurations
+            data['is_enabled_for_all_projects'] = True
+            self.logger.log(f'[Qase] Creating field without configs: {field["label"]}')
+            
         return data
 
-    @staticmethod
-    def __get_default_value(field):
-        if 'configs' in field:
-            if len(field['configs']) > 0:
-                if 'options' in field['configs'][0]:
-                    if 'default_value' in field['configs'][0]['options']:
-                        return field['configs'][0]['options']['default_value']
-        return None
+
 
     @staticmethod
     def __split_values(string: str, delimiter: str = ',') -> dict:

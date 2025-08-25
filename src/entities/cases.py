@@ -176,8 +176,12 @@ class Cases:
         for field_name in case:
             if field_name.startswith('custom_'):
                 normalized_name = self.__normalize_custom_field_name(field_name[len('custom_'):])
-                if normalized_name in self.mappings.custom_fields and case[field_name]:
-                    custom_field = self.mappings.custom_fields[normalized_name]
+                
+                # Look for project-specific field first
+                project_specific_key = f"{normalized_name}_{self.project['code']}"
+                if project_specific_key in self.mappings.custom_fields and case[field_name]:
+                    custom_field = self.mappings.custom_fields[project_specific_key]
+                    self.logger.log(f'[{self.project["code"]}][Tests] Using project-specific field {project_specific_key} for case {case["title"]} with value: {case[field_name]}')
                     # Importing step
 
                     if custom_field['type_id'] in (6, 12):
@@ -186,12 +190,43 @@ class Cases:
                         if value:
                             if type(value) == str or type(value) == int:
                                 data['custom_field'][str(custom_field['qase_id'])] = str(int(value) + 1)
+                                self.logger.log(f'[{self.project["code"]}][Tests] Set field {custom_field["name"]} to value: {str(int(value) + 1)}')
                             if type(value) == list:
                                 data['custom_field'][str(custom_field['qase_id'])] = ','.join(
                                     str(int(v) + 1) for v in value)
+                                self.logger.log(f'[{self.project["code"]}][Tests] Set field {custom_field["name"]} to values: {",".join(str(int(v) + 1) for v in value)}')
+                        else:
+                            self.logger.log(f'[{self.project["code"]}][Tests] Field {custom_field["name"]} validation failed for value: {case[field_name]}')
                     else:
                         data['custom_field'][str(custom_field['qase_id'])] = self.__format_links_as_markdown(str(
                             self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
+                        self.logger.log(f'[{self.project["code"]}][Tests] Set field {custom_field["name"]} to text value')
+                            
+                # Fallback to original field name for backward compatibility
+                elif normalized_name in self.mappings.custom_fields and case[field_name]:
+                    custom_field = self.mappings.custom_fields[normalized_name]
+                    self.logger.log(f'[{self.project["code"]}][Tests] Using global field {normalized_name} for case {case["title"]} with value: {case[field_name]}')
+                    # Importing step
+
+                    if custom_field['type_id'] in (6, 12):
+                        # Importing dropdown and multiselect values
+                        value = self._validate_custom_field_values(custom_field, case[field_name])
+                        if value:
+                            if type(value) == str or type(value) == int:
+                                data['custom_field'][str(custom_field['qase_id'])] = str(int(value) + 1)
+                                self.logger.log(f'[{self.project["code"]}][Tests] Set global field {custom_field["name"]} to value: {str(int(value) + 1)}')
+                            if type(value) == list:
+                                data['custom_field'][str(custom_field['qase_id'])] = ','.join(
+                                    str(int(v) + 1) for v in value)
+                                self.logger.log(f'[{self.project["code"]}][Tests] Set global field {custom_field["name"]} to values: {",".join(str(int(v) + 1) for v in value)}')
+                        else:
+                            self.logger.log(f'[{self.project["code"]}][Tests] Global field {custom_field["name"]} validation failed for value: {case[field_name]}')
+                    else:
+                        data['custom_field'][str(custom_field['qase_id'])] = self.__format_links_as_markdown(str(
+                            self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
+                        self.logger.log(f'[{self.project["code"]}][Tests] Set global field {custom_field["name"]} to text value')
+                else:
+                    self.logger.log(f'[{self.project["code"]}][Tests] No field found for {normalized_name} or {project_specific_key}')
 
             if field_name[len('custom_'):] == 'testrail_bdd_scenario' and case[field_name] is not None:
                 steps = []
@@ -259,9 +294,42 @@ class Cases:
 
     # Done. Method validates if custom field value exists (skip)
     def _validate_custom_field_values(self, custom_field: dict, value: Union[str, List]) -> Optional[Union[str, list]]:
-        if len(custom_field['configs']) > 0 and 'options' in custom_field['configs'][0] and 'items' in \
-                custom_field['configs'][0]['options'] and len(custom_field['configs'][0]['options']['items']) > 0:
-            values = self.__split_values(custom_field['configs'][0]['options']['items'])
+        # Find the configuration for the current project
+        project_config = None
+        
+        self.logger.log(f'[{self.project["code"]}][Tests] Validating field {custom_field["name"]} with value {value}')
+        
+        # If field has project-specific information, use it directly
+        if custom_field.get('project_id') and custom_field.get('project_code'):
+            if custom_field['project_code'] == self.project['code']:
+                # This is a project-specific field, use its config directly
+                if custom_field.get('configs') and len(custom_field['configs']) > 0:
+                    project_config = custom_field['configs'][0]
+                    self.logger.log(f'[{self.project["code"]}][Tests] Using project-specific config for field {custom_field["name"]}')
+            else:
+                # This field is for a different project, skip validation
+                self.logger.log(f'[{self.project["code"]}][Tests] Field {custom_field["name"]} is for project {custom_field["project_code"]}, not {self.project["code"]}')
+                return None
+        else:
+            # Legacy field or global field, find configuration by project ID
+            if custom_field.get('configs') and len(custom_field['configs']) > 0:
+                for config in custom_field['configs']:
+                    if (config.get('context', {}).get('project_ids') and 
+                        self.project['testrail_id'] in config['context']['project_ids']):
+                        project_config = config
+                        self.logger.log(f'[{self.project["code"]}][Tests] Found project config for field {custom_field["name"]} by testrail_id')
+                        break
+                
+                # If no project-specific config found, use the first one
+                if not project_config and len(custom_field['configs']) > 0:
+                    project_config = custom_field['configs'][0]
+                    self.logger.log(f'[{self.project["code"]}][Tests] Using first config for field {custom_field["name"]}')
+        
+        if (project_config and 'options' in project_config and 'items' in project_config['options'] 
+            and len(project_config['options']['items']) > 0):
+            values = self.__split_values(project_config['options']['items'])
+            self.logger.log(f'[{self.project["code"]}][Tests] Field {custom_field["name"]} has {len(values)} valid values: {values}')
+            
             if type(value) == str or type(value) == int:
                 if str(value) not in values.keys():
                     self.logger.log(
@@ -282,6 +350,8 @@ class Cases:
                 else:
                     return filtered_values
             return value
+        else:
+            self.logger.log(f'[{self.project["code"]}][Tests] Field {custom_field["name"]} has no valid configuration or items')
         return None
 
     def __split_values(self, string: str, delimiter: str = ',') -> dict:
