@@ -188,6 +188,11 @@ class Fields:
         if qase_id > 0:
             self.logger.log(f'[Fields] Global custom field created: {field["label"]}')
             field['qase_id'] = qase_id
+            
+            # Create tr_key_to_qase_id mapping for the newly created field
+            if field.get('qase_values'):
+                self._create_tr_key_to_qase_id_mapping(field)
+            
             self.mappings.custom_fields[field['name']] = field
             self.mappings.stats.add_custom_field('qase')
         else:
@@ -245,6 +250,31 @@ class Fields:
                             values = json.loads(qase_field.value)
                             for value in values:
                                 field['qase_values'][value['id']] = value['title']
+                        
+                        # Always refresh the mapping when field exists
+                        if 'configs' in field and len(field['configs']) > 0:
+                            config = field['configs'][0]
+                            if 'options' in config and 'items' in config['options']:
+                                items = config['options']['items']
+                                if items:
+                                    # Parse items string into TestRail ID mapping
+                                    tr_values = {}
+                                    for line in items.split('\n'):
+                                        if ',' in line:
+                                            key, title = line.split(',', 1)
+                                            tr_values[key.strip()] = title.strip()
+                                    
+                                    # Create TestRail ID to Qase ID mapping
+                                    field['tr_key_to_qase_id'] = {}
+                                    for tr_key, tr_title in tr_values.items():
+                                        for qase_id, qase_title in field['qase_values'].items():
+                                            if tr_title.strip() == qase_title.strip():
+                                                field['tr_key_to_qase_id'][tr_key] = qase_id
+                                                self.logger.log(f'[Fields] Mapped TestRail value {tr_key} ({tr_title}) to Qase ID {qase_id}')
+                                                break
+                                    
+                                    self.logger.log(f'[Fields] Refreshed TestRail to Qase mapping for project field {field["label"]}: {field["tr_key_to_qase_id"]}')
+                    
                     field['qase_id'] = qase_field.id
                     self.mappings.custom_fields[field['name']] = field
                     return
@@ -358,6 +388,11 @@ class Fields:
                 if qase_id > 0:
                     self.logger.log(f'[Fields] Custom field created for project {project_code}: {field_name_with_project}')
                     field_copy['qase_id'] = qase_id
+                    
+                    # Create tr_key_to_qase_id mapping for the newly created field
+                    if field_copy.get('qase_values'):
+                        self._create_tr_key_to_qase_id_mapping(field_copy)
+                    
                     # Store field mapping with project-specific key
                     self.mappings.custom_fields[f"{field['name']}_{project_code}"] = field_copy
                     self.mappings.stats.add_custom_field('qase')
@@ -467,3 +502,37 @@ class Fields:
                     self.mappings.case_statuses[tr_status['case_status_id']] = qase_status['id']
 
         self.logger.log('[Fields] Case statuses map was created')
+
+    def _create_tr_key_to_qase_id_mapping(self, field: dict) -> None:
+        """
+        Create mapping between TestRail field values and Qase field values.
+        This ensures that when we import test cases, we can correctly map TestRail values to Qase IDs.
+        """
+        if 'configs' not in field or len(field['configs']) == 0:
+            return
+        
+        config = field['configs'][0]
+        if 'options' not in config or 'items' not in config['options']:
+            return
+        
+        items = config['options']['items']
+        if not items:
+            return
+        
+        # Parse items string into TestRail ID mapping
+        tr_values = {}
+        for line in items.split('\n'):
+            if ',' in line:
+                key, title = line.split(',', 1)
+                tr_values[key.strip()] = title.strip()
+        
+        # Create TestRail ID to Qase ID mapping
+        field['tr_key_to_qase_id'] = {}
+        for tr_key, tr_title in tr_values.items():
+            for qase_id, qase_title in field['qase_values'].items():
+                if tr_title.strip() == qase_title.strip():
+                    field['tr_key_to_qase_id'][tr_key] = qase_id
+                    self.logger.log(f'[Fields] Created mapping: TestRail {tr_key} ({tr_title}) -> Qase ID {qase_id}')
+                    break
+        
+        self.logger.log(f'[Fields] Created TestRail to Qase mapping for field {field["label"]}: {field["tr_key_to_qase_id"]}')

@@ -177,54 +177,6 @@ class Cases:
             if field_name.startswith('custom_'):
                 normalized_name = self.__normalize_custom_field_name(field_name[len('custom_'):])
                 
-                # Special handling for field 62 - this field has different value mapping
-                if normalized_name == '62' or normalized_name == 'abc':
-                    self.logger.log(f'[{self.project["code"]}][Tests] Special handling for field 62/abc with value: {case[field_name]}')
-                    if case[field_name] and str(case[field_name]).strip() != '':
-                        # For field 62, we'll use the value as-is without any offset
-                        # This field seems to have different value mapping in Qase
-                        try:
-                            # The field 62 has mapping: {'1': 1, '2': 2, '3': 3}
-                            # So we need to validate that the value is in this range
-                            testrail_value = int(case[field_name])
-                            if testrail_value in [1, 2, 3]:
-                                # Use the value directly as it matches the Qase mapping
-                                final_value = str(testrail_value)
-                                data['custom_field']['62'] = final_value
-                                self.logger.log(f'[{self.project["code"]}][Tests] Set field 62 using special logic to value: {final_value}')
-                            else:
-                                self.logger.log(f'[{self.project["code"]}][Tests] Field 62 value {testrail_value} is not in valid range [1,2,3], skipping', 'warning')
-                        except (ValueError, TypeError) as e:
-                            self.logger.log(f'[{self.project["code"]}][Tests] Field 62 value {case[field_name]} is not a valid integer: {e}', 'warning')
-                        except Exception as e:
-                            self.logger.log(f'[{self.project["code"]}][Tests] Error in field 62 special handling: {e}', 'error')
-                    else:
-                        self.logger.log(f'[{self.project["code"]}][Tests] Field 62 has empty or null value, skipping')
-                    continue  # Skip normal processing for field 62
-                
-                # Special handling for field 65 (Automation) - this field also has different value mapping
-                if normalized_name == '65' or normalized_name == 'automation':
-                    self.logger.log(f'[{self.project["code"]}][Tests] Special handling for field 65/automation with value: {case[field_name]}')
-                    if case[field_name] and str(case[field_name]).strip() != '':
-                        try:
-                            # The field 65 has mapping: {'1': 'Yes', '2': 'No'}
-                            # So we need to validate that the value is in this range
-                            testrail_value = int(case[field_name])
-                            if testrail_value in [1, 2]:
-                                # Use the value directly as it matches the Qase mapping
-                                final_value = str(testrail_value)
-                                data['custom_field']['65'] = final_value
-                                self.logger.log(f'[{self.project["code"]}][Tests] Set field 65 using special logic to value: {final_value}')
-                            else:
-                                self.logger.log(f'[{self.project["code"]}][Tests] Field 65 value {testrail_value} is not in valid range [1,2], skipping', 'warning')
-                        except (ValueError, TypeError) as e:
-                            self.logger.log(f'[{self.project["code"]}][Tests] Field 65 value {case[field_name]} is not a valid integer: {e}', 'warning')
-                        except Exception as e:
-                            self.logger.log(f'[{self.project["code"]}][Tests] Error in field 65 special handling: {e}', 'error')
-                    else:
-                        self.logger.log(f'[{self.project["code"]}][Tests] Field 65 has empty or null value, skipping')
-                    continue  # Skip normal processing for field 65
-                
                 # Look for project-specific field first
                 project_specific_key = f"{normalized_name}_{self.project['code']}"
                 if project_specific_key in self.mappings.custom_fields and case[field_name]:
@@ -241,9 +193,15 @@ class Cases:
                         value = self._validate_custom_field_values(custom_field, case[field_name])
                         if value:
                             if type(value) == str or type(value) == int:
-                                # Single value - convert to string
-                                data['custom_field'][str(custom_field['qase_id'])] = str(int(value) + 1)
-                                self.logger.log(f'[{self.project["code"]}][Tests] Set field {custom_field["name"]} to value: {str(int(value) + 1)}')
+                                # Single value - use proper mapping if available
+                                if custom_field.get('tr_key_to_qase_id') and str(value) in custom_field['tr_key_to_qase_id']:
+                                    qase_id = custom_field['tr_key_to_qase_id'][str(value)]
+                                    data['custom_field'][str(custom_field['qase_id'])] = str(qase_id)
+                                    self.logger.log(f'[{self.project["code"]}][Tests] Set field {custom_field["name"]} using mapping {value} -> {qase_id}')
+                                else:
+                                    # Fallback - use value directly without +1 offset
+                                    data['custom_field'][str(custom_field['qase_id'])] = str(value)
+                                    self.logger.log(f'[{self.project["code"]}][Tests] Set field {custom_field["name"]} to value: {str(value)}')
                             elif type(value) == list:
                                 # Multiple values - handle based on field type
                                 if custom_field['type_id'] == 12:  # multiselect
@@ -275,16 +233,28 @@ class Cases:
                                         else:
                                             self.logger.log(f'[{self.project["code"]}][Tests] Global field {custom_field["name"]} validation failed for value: {value}')
                                     else:
-                                        # For project-specific fields, use the old logic
-                                        qase_values = [str(int(v) + 1) for v in value]
+                                        # For project-specific fields, use proper mapping
+                                        qase_values = []
+                                        for v in value:
+                                            testrail_key = str(v)
+                                            if custom_field.get('tr_key_to_qase_id') and testrail_key in custom_field['tr_key_to_qase_id']:
+                                                qase_id = custom_field['tr_key_to_qase_id'][testrail_key]
+                                                qase_values.append(str(qase_id))
+                                            else:
+                                                # Fallback - use value directly without +1 offset
+                                                qase_values.append(str(v))
                                         data['custom_field'][str(custom_field['qase_id'])] = ','.join(qase_values)
                                         self.logger.log(f'[{self.project["code"]}][Tests] Set project-specific multiselect field {custom_field["name"]} to values: {",".join(qase_values)}')
                                 else:  # single select (type_id = 6)
                                     # For single select, take first value only
-                                    data['custom_field'][str(custom_field['qase_id'])] = str(int(value[0]) + 1)
-                                    self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} to value: {str(int(value[0]) + 1)}')
-                        else:
-                            self.logger.log(f'[{self.project["code"]}][Tests] Field {custom_field["name"]} validation failed for value: {case[field_name]}')
+                                    if custom_field.get('tr_key_to_qase_id') and str(value[0]) in custom_field['tr_key_to_qase_id']:
+                                        qase_id = custom_field['tr_key_to_qase_id'][str(value[0])]
+                                        data['custom_field'][str(custom_field['qase_id'])] = str(qase_id)
+                                        self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} using mapping {value[0]} -> {qase_id}')
+                                    else:
+                                        # Fallback - use value directly without +1 offset
+                                        data['custom_field'][str(custom_field['qase_id'])] = str(value[0])
+                                        self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} to value: {str(value[0])}')
                     else:
                         data['custom_field'][str(custom_field['qase_id'])] = self.__format_links_as_markdown(str(
                             self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
@@ -304,9 +274,15 @@ class Cases:
                         value = self._validate_custom_field_values(custom_field, case[field_name])
                         if value:
                             if type(value) == str or type(value) == int:
-                                # Single value - convert to string
-                                data['custom_field'][str(custom_field['qase_id'])] = str(int(value) + 1)
-                                self.logger.log(f'[{self.project["code"]}][Tests] Set global field {custom_field["name"]} to value: {str(int(value) + 1)}')
+                                # Single value - use proper mapping if available
+                                if custom_field.get('tr_key_to_qase_id') and str(value) in custom_field['tr_key_to_qase_id']:
+                                    qase_id = custom_field['tr_key_to_qase_id'][str(value)]
+                                    data['custom_field'][str(custom_field['qase_id'])] = str(qase_id)
+                                    self.logger.log(f'[{self.project["code"]}][Tests] Set global field {custom_field["name"]} using mapping {value} -> {qase_id}')
+                                else:
+                                    # Fallback - use value directly without +1 offset
+                                    data['custom_field'][str(custom_field['qase_id'])] = str(value)
+                                    self.logger.log(f'[{self.project["code"]}][Tests] Set global field {custom_field["name"]} to value: {str(value)}')
                             elif type(value) == list:
                                 # Multiple values - handle based on field type
                                 if custom_field['type_id'] == 12:  # multiselect
@@ -338,14 +314,28 @@ class Cases:
                                         else:
                                             self.logger.log(f'[{self.project["code"]}][Tests] Global field {custom_field["name"]} validation failed for value: {value}')
                                     else:
-                                        # For project-specific fields, use the old logic
-                                        qase_values = [str(int(v) + 1) for v in value]
+                                        # For project-specific fields, use proper mapping
+                                        qase_values = []
+                                        for v in value:
+                                            testrail_key = str(v)
+                                            if custom_field.get('tr_key_to_qase_id') and testrail_key in custom_field['tr_key_to_qase_id']:
+                                                qase_id = custom_field['tr_key_to_qase_id'][testrail_key]
+                                                qase_values.append(str(qase_id))
+                                            else:
+                                                # Fallback - use value directly without +1 offset
+                                                qase_values.append(str(v))
                                         data['custom_field'][str(custom_field['qase_id'])] = ','.join(qase_values)
                                         self.logger.log(f'[{self.project["code"]}][Tests] Set project-specific multiselect field {custom_field["name"]} to values: {",".join(qase_values)}')
                                 else:  # single select (type_id = 6)
                                     # For single select, take first value only
-                                    data['custom_field'][str(custom_field['qase_id'])] = str(int(value[0]) + 1)
-                                    self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} to value: {str(int(value[0]) + 1)}')
+                                    if custom_field.get('tr_key_to_qase_id') and str(value[0]) in custom_field['tr_key_to_qase_id']:
+                                        qase_id = custom_field['tr_key_to_qase_id'][str(value[0])]
+                                        data['custom_field'][str(custom_field['qase_id'])] = str(qase_id)
+                                        self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} using mapping {value[0]} -> {qase_id}')
+                                    else:
+                                        # Fallback - use value directly without +1 offset
+                                        data['custom_field'][str(custom_field['qase_id'])] = str(value[0])
+                                        self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} to value: {str(value[0])}')
                         else:
                             self.logger.log(f'[{self.project["code"]}][Tests] Global field {custom_field["name"]} validation failed for value: {value}')
                             return None
