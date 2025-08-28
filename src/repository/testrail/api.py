@@ -35,16 +35,36 @@ class TestrailApiRepository:
         return self.client.get('get_projects/' + f'&limit={limit}&offset={offset}')
     
     def get_suites(self, project_id, offset = 0, limit = 100):
-        suites = self.client.get('get_suites/' + str(project_id) + f'&limit={limit}')
+        response = self.client.get('get_suites/' + str(project_id) + f'&limit={limit}')
+        
+        # Handle both list and dict responses from TestRail API
+        if isinstance(response, dict) and 'suites' in response:
+            suites = response['suites']
+        elif isinstance(response, list):
+            suites = response
+        else:
+            suites = []
+        
         if (suites and len(suites) == limit):
-            suites += self.get_suites(project_id, offset + limit, limit)
+            additional_suites = self.get_suites(project_id, offset + limit, limit)
+            if isinstance(additional_suites, list):
+                suites += additional_suites
         return suites
     
     def get_sections(self, project_id: int, limit: int = 100, offset: int = 0, suite_id: int = 0):
         uri = 'get_sections/' + str(project_id) + f'&limit={limit}&offset={offset}'
         if (suite_id > 0):
             uri += f'&suite_id={suite_id}'
-        return self.client.get(uri)
+        
+        response = self.client.get(uri)
+        
+        # Handle both list and dict responses from TestRail API
+        if isinstance(response, dict) and 'sections' in response:
+            return response['sections']
+        elif isinstance(response, list):
+            return response
+        else:
+            return []
     
     def get_shared_steps(self, project_id: int, limit: int = 250, offset: int = 0):
         return self.client.get('get_shared_steps/' + str(project_id) + f'&limit={limit}&offset={offset}')
