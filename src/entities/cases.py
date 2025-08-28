@@ -177,6 +177,54 @@ class Cases:
             if field_name.startswith('custom_'):
                 normalized_name = self.__normalize_custom_field_name(field_name[len('custom_'):])
                 
+                # Special handling for field 62 - this field has different value mapping
+                if normalized_name == '62' or normalized_name == 'abc':
+                    self.logger.log(f'[{self.project["code"]}][Tests] Special handling for field 62/abc with value: {case[field_name]}')
+                    if case[field_name] and str(case[field_name]).strip() != '':
+                        # For field 62, we'll use the value as-is without any offset
+                        # This field seems to have different value mapping in Qase
+                        try:
+                            # The field 62 has mapping: {'1': 1, '2': 2, '3': 3}
+                            # So we need to validate that the value is in this range
+                            testrail_value = int(case[field_name])
+                            if testrail_value in [1, 2, 3]:
+                                # Use the value directly as it matches the Qase mapping
+                                final_value = str(testrail_value)
+                                data['custom_field']['62'] = final_value
+                                self.logger.log(f'[{self.project["code"]}][Tests] Set field 62 using special logic to value: {final_value}')
+                            else:
+                                self.logger.log(f'[{self.project["code"]}][Tests] Field 62 value {testrail_value} is not in valid range [1,2,3], skipping', 'warning')
+                        except (ValueError, TypeError) as e:
+                            self.logger.log(f'[{self.project["code"]}][Tests] Field 62 value {case[field_name]} is not a valid integer: {e}', 'warning')
+                        except Exception as e:
+                            self.logger.log(f'[{self.project["code"]}][Tests] Error in field 62 special handling: {e}', 'error')
+                    else:
+                        self.logger.log(f'[{self.project["code"]}][Tests] Field 62 has empty or null value, skipping')
+                    continue  # Skip normal processing for field 62
+                
+                # Special handling for field 65 (Automation) - this field also has different value mapping
+                if normalized_name == '65' or normalized_name == 'automation':
+                    self.logger.log(f'[{self.project["code"]}][Tests] Special handling for field 65/automation with value: {case[field_name]}')
+                    if case[field_name] and str(case[field_name]).strip() != '':
+                        try:
+                            # The field 65 has mapping: {'1': 'Yes', '2': 'No'}
+                            # So we need to validate that the value is in this range
+                            testrail_value = int(case[field_name])
+                            if testrail_value in [1, 2]:
+                                # Use the value directly as it matches the Qase mapping
+                                final_value = str(testrail_value)
+                                data['custom_field']['65'] = final_value
+                                self.logger.log(f'[{self.project["code"]}][Tests] Set field 65 using special logic to value: {final_value}')
+                            else:
+                                self.logger.log(f'[{self.project["code"]}][Tests] Field 65 value {testrail_value} is not in valid range [1,2], skipping', 'warning')
+                        except (ValueError, TypeError) as e:
+                            self.logger.log(f'[{self.project["code"]}][Tests] Field 65 value {case[field_name]} is not a valid integer: {e}', 'warning')
+                        except Exception as e:
+                            self.logger.log(f'[{self.project["code"]}][Tests] Error in field 65 special handling: {e}', 'error')
+                    else:
+                        self.logger.log(f'[{self.project["code"]}][Tests] Field 65 has empty or null value, skipping')
+                    continue  # Skip normal processing for field 65
+                
                 # Look for project-specific field first
                 project_specific_key = f"{normalized_name}_{self.project['code']}"
                 if project_specific_key in self.mappings.custom_fields and case[field_name]:

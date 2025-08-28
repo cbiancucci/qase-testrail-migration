@@ -11,7 +11,8 @@
         "api": {
             "host": "<TESTRAIL_HOST>",
             "user": "<TESTRAIL_USER_EMAIL>",
-            "password": "<TESTRAIL_USER_PASSWORD>"
+            "password": "<TESTRAIL_USER_PASSWORD>",
+            "token": "<TESTRAIL_API_TOKEN>"
         }
     },
     "projects": {
