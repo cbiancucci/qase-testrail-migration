@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 
 
 class TestrailApiClient:
-    def __init__(self, base_url, user, token, logger, max_retries=7, backoff_factor=5):
+    def __init__(self, base_url, user, token, logger, max_retries=7, backoff_factor=5, api_token=None):
         if not base_url.endswith('/'):
             base_url += '/'
         self.__url = base_url + 'index.php?/api/v2/'
@@ -16,9 +16,17 @@ class TestrailApiClient:
         self.logger = logger
         self.base_url = base_url
 
+        # Use Basic Auth with API token for API v2 calls
+        if api_token:
+            auth_user = user
+            auth_token = api_token
+        else:
+            auth_user = user
+            auth_token = token
+            
         self.auth = str(
             base64.b64encode(
-                bytes('%s:%s' % (user, token), 'utf-8')
+                bytes('%s:%s' % (auth_user, auth_token), 'utf-8')
             ),
             'ascii'
         ).strip()
@@ -31,7 +39,7 @@ class TestrailApiClient:
         self.backoff_factor = backoff_factor
         self.page_size = 30
 
-        # Create a session object
+        # Create a session object for HTML-based operations (attachments)
         self.session = requests.Session()
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -45,7 +53,12 @@ class TestrailApiClient:
         soup = BeautifulSoup(login_response.content, 'html.parser')
 
         # Find the input tag with name="_token" and extract the value attribute
-        self.csrf_token = soup.find('input', {'name': '_token'})['value']
+        csrf_input = soup.find('input', {'name': '_token'})
+        if csrf_input and 'value' in csrf_input.attrs:
+            self.csrf_token = csrf_input['value']
+        else:
+            self.logger.log('CSRF token not found, using fallback approach')
+            self.csrf_token = None
 
         if login_response.status_code != 200:
             self.logger.log('Failed to login to TestRail API and get auth cookie')

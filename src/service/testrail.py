@@ -9,7 +9,8 @@ class TestrailService:
             TestrailApiClient(
                 base_url = config.get('testrail.api.host'),
                 user = config.get('testrail.api.user'),
-                token = config.get('testrail.api.password'),
+                token = config.get('testrail.api.password'),  # Use password for HTML auth
+                api_token = config.get('testrail.api.token'),  # Use API token for API calls
                 logger = logger,
                 max_retries = 5,
                 backoff_factor = 5

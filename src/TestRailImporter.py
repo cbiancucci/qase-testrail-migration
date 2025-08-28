@@ -27,15 +27,15 @@ class TestRailImporter:
 
     def start(self):
         # Step 1. Build users map
-        self.mappings = Users(
-            self.qase_service,
-            self.testrail_service,
-            self.logger,
-            self.mappings,
-            self.config,
-            self.pools,
-            self.qase_scim_service,
-        ).import_users()
+        # self.mappings = Users(
+        #     self.qase_service,
+        #     self.testrail_service,
+        #     self.logger,
+        #     self.mappings,
+        #     self.config,
+        #     self.pools,
+        #     self.qase_scim_service,
+        # ).import_users()
 
         # Step 2. Import project and build projects map
         self.mappings = Projects(
