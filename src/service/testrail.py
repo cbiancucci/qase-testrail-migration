@@ -13,7 +13,8 @@ class TestrailService:
                 api_token = config.get('testrail.api.token'),  # Use API token for API calls
                 logger = logger,
                 max_retries = 5,
-                backoff_factor = 5
+                backoff_factor = 5,
+                requests_per_minute = config.get('testrail.api.requests_per_minute') or 0
             )
         )
 

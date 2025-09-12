@@ -12,7 +12,8 @@
             "host": "<TESTRAIL_HOST>",
             "user": "<TESTRAIL_USER_EMAIL>",
             "password": "<TESTRAIL_USER_PASSWORD>",
-            "token": "<TESTRAIL_API_TOKEN>"
+            "token": "<TESTRAIL_API_TOKEN>",
+            "requests_per_minute": 0
         }
     },
     "projects": {

@@ -29,7 +29,8 @@ Create a new config file from the example or use template:
             "host": "<TESTRAIL_HOST>",
             "user": "<TESTRAIL_USER_EMAIL>",
             "password": "<TESTRAIL_USER_PASSWORD>",
-            "token": "<TESTRAIL_API_TOKEN>"
+            "token": "<TESTRAIL_API_TOKEN>",
+            "requests_per_minute": 0
         }
     },
     "projects": {
@@ -77,6 +78,7 @@ Required fields to fill:
 - `testrail.api.user` - Email of user in TestRail. This user should have *administrator* access rights
 - `testrail.api.password` - Password of user in TestRail (for HTML-based operations like attachments)
 - `testrail.api.token` - API token of user in TestRail (for direct API calls)
+- `testrail.api.requests_per_minute` - Maximum number of requests per minute to TestRail API. Set to `0` to disable rate limiting. *Default: 0*
 - `projects.import` - List of projects to migrate. You can specify only name of project. Example: `["Project 1", "Project 2"]`
 - `projects.status` - Status of projects to migrate. Can be `all`, `active` or `inactive`. 
 - `users.default` - ID of user in Qase. This user will be used as author of all test cases if migrator unable to match user from TestRail to Qase

@@ -5,10 +5,11 @@ import re
 import http.client
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
+from ..support.rate_limiter import RateLimiter
 
 
 class TestrailApiClient:
-    def __init__(self, base_url, user, token, logger, max_retries=7, backoff_factor=5, api_token=None):
+    def __init__(self, base_url, user, token, logger, max_retries=7, backoff_factor=5, api_token=None, requests_per_minute=0):
         if not base_url.endswith('/'):
             base_url += '/'
         self.__url = base_url + 'index.php?/api/v2/'
@@ -38,6 +39,11 @@ class TestrailApiClient:
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.page_size = 30
+        
+        # Initialize rate limiter
+        self.rate_limiter = RateLimiter(requests_per_minute)
+        if self.rate_limiter.is_enabled():
+            self.logger.log(f'Rate limiting enabled: {requests_per_minute} requests per minute')
 
         # Create a session object for HTML-based operations (attachments)
         self.session = requests.Session()
@@ -69,18 +75,34 @@ class TestrailApiClient:
 
     def send_request(self, request_method, uri, payload=None):
         url = self.__url + uri
+        self.logger.log(f'Making request to: {url}')
         for attempt in range(self.max_retries + 1):
             try:
+                # Apply rate limiting before making the request
+                self.rate_limiter.wait_if_needed()
+                
                 response = request_method(url, headers=self.headers, data=payload)
-                if response.status_code != 429 and response.status_code <= 201:
+                self.logger.log(f'Response status: {response.status_code}')
+                
+                if response.status_code == 429:
+                    # Rate limit exceeded - wait and retry
+                    retry_delay = self.rate_limiter.get_retry_delay()
+                    self.logger.log(f'Rate limit exceeded (429), waiting {retry_delay:.2f} seconds before retry')
+                    time.sleep(retry_delay)
+                    continue
+                elif response.status_code <= 201:
                     return self.process_response(response, uri)
-                if response.status_code == 403:
+                elif response.status_code == 403:
+                    self.logger.log(f'Access denied (403) for URL: {url}')
                     raise APIError('Access denied.')
-                if response.status_code == 400:
+                elif response.status_code == 400:
+                    self.logger.log(f'Invalid data or entity not found (400) for URL: {url}')
                     raise APIError('Invalid data or entity not found.')
                 else:
+                    self.logger.log(f'Server error ({response.status_code}) for URL: {url}, attempt {attempt + 1}')
                     time.sleep(self.backoff_factor * (2 ** attempt))
             except (requests.exceptions.Timeout, http.client.RemoteDisconnected, ConnectionResetError, requests.exceptions.ConnectionError) as e:
+                self.logger.log(f'Connection error for URL: {url}, attempt {attempt + 1}: {str(e)}')
                 time.sleep(self.backoff_factor * (2 ** attempt))
             
             if attempt == self.max_retries:

@@ -27,7 +27,7 @@ class TestRailImporter:
 
     def start(self):
         # Step 1. Build users map (if migration is enabled)
-        if self.config.get('users.migrate', True):
+        if self.config.get('users.migrate') is not False:
             self.mappings = Users(
                 self.qase_service,
                 self.testrail_service,
@@ -38,7 +38,7 @@ class TestRailImporter:
                 self.qase_scim_service,
             ).import_users()
         else:
-            self.logger.info("User migration is disabled by configuration")
+            self.logger.log("User migration is disabled by configuration")
 
         # Step 2. Import project and build projects map
         self.mappings = Projects(
