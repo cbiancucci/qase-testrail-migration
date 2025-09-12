@@ -36,7 +36,8 @@
     "users": {
         "default": 1,
         "create": true,
-        "inactive": true
+        "inactive": true,
+        "migrate": true
     },
     "groups": {
         "create": false,

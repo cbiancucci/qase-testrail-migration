@@ -167,3 +167,5 @@ output/
 stats/
 
 *config.json
+
+.idea/

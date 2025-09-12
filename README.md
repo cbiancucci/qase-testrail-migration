@@ -53,7 +53,8 @@ Create a new config file from the example or use template:
     "users": {
         "default": 1,
         "create": true,
-        "inactive": true
+        "inactive": true,
+        "migrate": true
     },
     "groups": {
         "create": false,
@@ -81,6 +82,7 @@ Required fields to fill:
 - `users.default` - ID of user in Qase. This user will be used as author of all test cases if migrator unable to match user from TestRail to Qase
 - `users.create` - If set to `true` migrator will create new users in Qase if it unable to match user from TestRail to Qase. *SCIM API token is required for this option.*
 - `users.inactive` - If set to `true` migrator will migrate all users from TestRail to Qase. *SCIM API token is required for this option.*
+- `users.migrate` - If set to `true` migrator will perform user migration from TestRail to Qase. If set to `false`, user migration will be skipped. *Default: true*
 - `groups.create` - If set to `true` migrator will create new groups in Qase if it unable to match group from TestRail to Qase. *SCIM API token is required for this option.*
 - `groups.name` - Name of group in Qase where new users will be added. *SCIM API token is required for this option.*
 - `runs.created_after` - Unix timestamp. Migrator will migrate only runs created after this date. *Optional*

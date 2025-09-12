@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 class TestRailImporter:
     def __init__(self, config: ConfigManager, logger: Logger) -> None:
         self.pools = Pools(
-            qase_pool=ThrottledThreadPoolExecutor(max_workers=8, requests=250, interval=12),
+            qase_pool=ThrottledThreadPoolExecutor(max_workers=8, requests=230, interval=10),
             tr_pool=ThreadPoolExecutor(max_workers=8),
         )
 
@@ -26,16 +26,19 @@ class TestRailImporter:
         self.mappings = Mappings(self.config.get('users.default'))
 
     def start(self):
-        # Step 1. Build users map
-        # self.mappings = Users(
-        #     self.qase_service,
-        #     self.testrail_service,
-        #     self.logger,
-        #     self.mappings,
-        #     self.config,
-        #     self.pools,
-        #     self.qase_scim_service,
-        # ).import_users()
+        # Step 1. Build users map (if migration is enabled)
+        if self.config.get('users.migrate', True):
+            self.mappings = Users(
+                self.qase_service,
+                self.testrail_service,
+                self.logger,
+                self.mappings,
+                self.config,
+                self.pools,
+                self.qase_scim_service,
+            ).import_users()
+        else:
+            self.logger.info("User migration is disabled by configuration")
 
         # Step 2. Import project and build projects map
         self.mappings = Projects(
@@ -97,7 +100,7 @@ class TestRailImporter:
             self.mappings,
             self.pools,
         ).import_configurations(project)
-
+        
         self.mappings = SharedSteps(
             self.qase_service,
             self.testrail_service,

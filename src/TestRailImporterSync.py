@@ -26,16 +26,19 @@ class TestRailImporterSync:
         self.mappings = Mappings(self.config.get('users.default'))
 
     def start(self):
-        # Step 1. Build users map
-        self.mappings = Users(
-            self.qase_service, 
-            self.testrail_service, 
-            self.logger, 
-            self.mappings,
-            self.config,
-            self.pools,
-            self.qase_scim_service,
-        ).import_users()
+        # Step 1. Build users map (if migration is enabled)
+        if self.config.get('users.migrate', True):
+            self.mappings = Users(
+                self.qase_service, 
+                self.testrail_service, 
+                self.logger, 
+                self.mappings,
+                self.config,
+                self.pools,
+                self.qase_scim_service,
+            ).import_users()
+        else:
+            self.logger.info("User migration is disabled by configuration")
 
         # Step 2. Import project and build projects map
         self.mappings = Projects(
