@@ -332,12 +332,13 @@ class Fields:
                 project_code = self.mappings.project_map[project_id]
                 field_name_with_project = f"{field['name']}_{project_code}"
                 
-                self.logger.log(f'[Fields] Creating field {field_name_with_project} for project {project_code}')
-                
                 # Create field copy early for this project
                 field_copy = field.copy()
-                field_copy['label'] = field_name_with_project
+                # Create project-specific label: original label + project code
+                field_copy['label'] = f"{field['label']} {project_code}"
                 field_copy['configs'] = [config]  # Use only this project's config
+                
+                self.logger.log(f'[Fields] Creating field {field_copy["label"]} for project {project_code}')
                 
                 # Store project information for validation
                 field_copy['project_id'] = project_id
@@ -347,21 +348,21 @@ class Fields:
                 field_exists = False
                 if qase_fields and len(qase_fields) > 0:
                     for qase_field in qase_fields:
-                        if (qase_field.title == field_name_with_project and 
+                        if (qase_field.title == field_copy['label'] and 
                             self.mappings.custom_fields_type[field['type_id']] == self.mappings.qase_fields_type[qase_field.type.lower()]):
-                            self.logger.log(f'[Fields] Custom field already exists for project {project_code}: {field_name_with_project}')
+                            self.logger.log(f'[Fields] Custom field already exists for project {project_code}: {field_copy["label"]}')
                             
                             # Check if field needs to be updated
                             needs_update, update_data = self.qase.check_field_update_needed(field_copy, qase_field, self.mappings)
                             
                             if needs_update:
-                                self.logger.log(f'[Fields] Project field {field_name_with_project} needs update: {update_data}')
+                                self.logger.log(f'[Fields] Project field {field_copy["label"]} needs update: {update_data}')
                                 
                                 # Update the field
                                 update_success = await self.pools.qs(self.qase.update_custom_field, qase_field.id, update_data)
                                 
                                 if update_success:
-                                    self.logger.log(f'[Fields] Successfully updated project field {field_name_with_project}')
+                                    self.logger.log(f'[Fields] Successfully updated project field {field_copy["label"]}')
                                     
                                     # Refresh field data after update
                                     if 'missing_values' in update_data or 'needs_mapping_update' in update_data:
@@ -393,7 +394,7 @@ class Fields:
                                                             
                                                             # Create TestRail ID to Qase ID mapping
                                                             field_copy['tr_key_to_qase_id'] = {}
-                                                            self.logger.log(f'[Fields] Creating mapping for project field {field_name_with_project} (qase_id: {qase_field.id})')
+                                                            self.logger.log(f'[Fields] Creating mapping for project field {field_copy["label"]} (qase_id: {qase_field.id})')
                                                             self.logger.log(f'[Fields] TestRail values: {tr_values}')
                                                             self.logger.log(f'[Fields] Qase values: {field_copy["qase_values"]}')
                                                             
@@ -406,13 +407,13 @@ class Fields:
                                                                 else:
                                                                     self.logger.log(f'[Fields] No match found for TestRail value {tr_key} ("{tr_title}")')
                                                             
-                                                            self.logger.log(f'[Fields] Created TestRail to Qase mapping for project field {field_name_with_project}: {field_copy["tr_key_to_qase_id"]}')
+                                                            self.logger.log(f'[Fields] Created TestRail to Qase mapping for project field {field_copy["label"]}: {field_copy["tr_key_to_qase_id"]}')
                                             except (json.JSONDecodeError, AttributeError):
                                                 pass
                                 else:
-                                    self.logger.log(f'[Fields] Failed to update project field {field_name_with_project}', 'warning')
+                                    self.logger.log(f'[Fields] Failed to update project field {field_copy["label"]}', 'warning')
                             else:
-                                self.logger.log(f'[Fields] Project field {field_name_with_project} is up to date')
+                                self.logger.log(f'[Fields] Project field {field_copy["label"]} is up to date')
                             
                             # Set up field data for later use
                             if qase_field.type.lower() in ("selectbox", "multiselect", "radio"):
@@ -439,7 +440,7 @@ class Fields:
                 
                 qase_id = await self.pools.qs(self.qase.create_custom_field, data)
                 if qase_id > 0:
-                    self.logger.log(f'[Fields] Custom field created for project {project_code}: {field_name_with_project}')
+                    self.logger.log(f'[Fields] Custom field created for project {project_code}: {field_copy["label"]}')
                     field_copy['qase_id'] = qase_id
                     
                     # Create tr_key_to_qase_id mapping for the newly created field
@@ -450,7 +451,7 @@ class Fields:
                     self.mappings.custom_fields[f"{field['name']}_{project_code}"] = field_copy
                     self.mappings.stats.add_custom_field('qase')
                 else:
-                    self.logger.log(f'[Fields] Failed to create custom field for project {project_code}: {field_name_with_project}', 'error')
+                    self.logger.log(f'[Fields] Failed to create custom field for project {project_code}: {field_copy["label"]}', 'error')
         
     async def _create_refs_field(self, qase_custom_fields):
         if self.config.get('tests.refs.enable'):

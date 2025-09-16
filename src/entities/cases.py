@@ -221,8 +221,12 @@ class Cases:
     @staticmethod
     def _get_ref(ref: str, url: str) -> str:
         if ref.startswith('http'):
-            return quote(ref, safe="/:")
-        return quote(f"{url}/{ref}", safe="/:")
+            link_url = quote(ref, safe="/:")
+        else:
+            link_url = quote(f"{url}/{ref}", safe="/:")
+        
+        # Wrap in markdown link format
+        return f"[{ref}]({link_url})"
 
     async def _get_attachments_for_case(self, case: dict, data: dict) -> dict:
         self.logger.log(f'[{self.project["code"]}][Tests] Getting attachments for case {case["title"]}')
