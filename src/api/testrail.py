@@ -75,14 +75,12 @@ class TestrailApiClient:
 
     def send_request(self, request_method, uri, payload=None):
         url = self.__url + uri
-        self.logger.log(f'Making request to: {url}')
         for attempt in range(self.max_retries + 1):
             try:
                 # Apply rate limiting before making the request
                 self.rate_limiter.wait_if_needed()
                 
                 response = request_method(url, headers=self.headers, data=payload)
-                self.logger.log(f'Response status: {response.status_code}')
                 
                 if response.status_code == 429:
                     # Rate limit exceeded - wait and retry

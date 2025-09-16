@@ -242,7 +242,8 @@ class QaseService:
                 'runs': {
                     'auto_complete': False,
                 }
-            }
+            },
+            'access': 'all'
         }
 
         if group_id is not None:

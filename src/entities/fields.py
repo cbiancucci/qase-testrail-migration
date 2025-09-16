@@ -70,6 +70,10 @@ class Fields:
 
         await self._create_refs_field(qase_custom_fields)
         await self._create_testrail_original_id_field(qase_custom_fields)
+        
+        # Print detailed summary of all custom fields
+        self._print_custom_fields_summary()
+        
         return self.mappings
 
     def _get_fields_to_import(self, custom_fields):
@@ -159,11 +163,18 @@ class Fields:
                                                     
                                                     # Create TestRail ID to Qase ID mapping
                                                     field['tr_key_to_qase_id'] = {}
+                                                    self.logger.log(f'[Fields] Creating mapping for field {field["label"]} (qase_id: {field.get("qase_id")})')
+                                                    self.logger.log(f'[Fields] TestRail values: {tr_values}')
+                                                    self.logger.log(f'[Fields] Qase values: {field["qase_values"]}')
+                                                    
                                                     for tr_key, tr_title in tr_values.items():
                                                         for qase_id, qase_title in field['qase_values'].items():
                                                             if tr_title.strip() == qase_title.strip():
                                                                 field['tr_key_to_qase_id'][tr_key] = qase_id
+                                                                self.logger.log(f'[Fields] Mapped: TestRail {tr_key} ("{tr_title}") -> Qase ID {qase_id} ("{qase_title}")')
                                                                 break
+                                                        else:
+                                                            self.logger.log(f'[Fields] No match found for TestRail value {tr_key} ("{tr_title}")')
                                                     
                                                     self.logger.log(f'[Fields] Created TestRail to Qase mapping for field {field["label"]}: {field["tr_key_to_qase_id"]}')
                                         
@@ -224,7 +235,7 @@ class Fields:
                             self.logger.log(f'[Fields] Successfully updated project field {field["label"]}')
                             
                             # Refresh field data after update
-                            if 'missing_values' in update_data:
+                            if 'missing_values' in update_data or 'needs_mapping_update' in update_data:
                                 # Get updated field to refresh values
                                 updated_field = await self.pools.qs(self.qase.get_custom_field, qase_field.id)
                                 
@@ -267,13 +278,19 @@ class Fields:
                                     
                                     # Create TestRail ID to Qase ID mapping
                                     field['tr_key_to_qase_id'] = {}
+                                    self.logger.log(f'[Fields] Creating mapping for project field {field["label"]} (qase_id: {field.get("qase_id")})')
+                                    self.logger.log(f'[Fields] TestRail values: {tr_values}')
+                                    self.logger.log(f'[Fields] Qase values: {field["qase_values"]}')
+                                    
                                     for tr_key, tr_title in tr_values.items():
                                         for qase_id, qase_title in field['qase_values'].items():
                                             if tr_title.strip() == qase_title.strip():
                                                 field['tr_key_to_qase_id'][tr_key] = qase_id
-                                                self.logger.log(f'[Fields] Mapped TestRail value {tr_key} ({tr_title}) to Qase ID {qase_id}')
+                                                self.logger.log(f'[Fields] Mapped: TestRail {tr_key} ("{tr_title}") -> Qase ID {qase_id} ("{qase_title}")')
                                                 break
-                                    
+                                        else:
+                                            self.logger.log(f'[Fields] No match found for TestRail value {tr_key} ("{tr_title}")')
+                                            
                                     self.logger.log(f'[Fields] Refreshed TestRail to Qase mapping for project field {field["label"]}: {field["tr_key_to_qase_id"]}')
                     
                     field['qase_id'] = qase_field.id
@@ -286,6 +303,11 @@ class Fields:
         if qase_id > 0:
             self.logger.log(f'[Fields] Project-specific custom field created: {field["label"]}')
             field['qase_id'] = qase_id
+            
+            # Create tr_key_to_qase_id mapping for the newly created field
+            if field.get('qase_values'):
+                self._create_tr_key_to_qase_id_mapping(field)
+            
             self.mappings.custom_fields[field['name']] = field
             self.mappings.stats.add_custom_field('qase')
         else:
@@ -342,7 +364,7 @@ class Fields:
                                     self.logger.log(f'[Fields] Successfully updated project field {field_name_with_project}')
                                     
                                     # Refresh field data after update
-                                    if 'missing_values' in update_data:
+                                    if 'missing_values' in update_data or 'needs_mapping_update' in update_data:
                                         # Get updated field to refresh values
                                         updated_field = await self.pools.qs(self.qase.get_custom_field, qase_field.id)
                                         
@@ -354,7 +376,37 @@ class Fields:
                                                     if hasattr(value, 'id') and hasattr(value, 'title'):
                                                         field_copy['qase_values'][value.id] = value.title
                                                     elif isinstance(value, dict) and 'id' in value and 'title' in value:
-                                                        field_copy['qase_values'][value['id']] = value.title
+                                                        field_copy['qase_values'][value['id']] = value['title']
+                                                
+                                                # Create TestRail ID to Qase ID mapping
+                                                if 'configs' in field and len(field['configs']) > 0:
+                                                    config = field['configs'][0]
+                                                    if 'options' in config and 'items' in config['options']:
+                                                        items = config['options']['items']
+                                                        if items:
+                                                            # Parse items string into TestRail ID mapping
+                                                            tr_values = {}
+                                                            for line in items.split('\n'):
+                                                                if ',' in line:
+                                                                    key, title = line.split(',', 1)
+                                                                    tr_values[key.strip()] = title.strip()
+                                                            
+                                                            # Create TestRail ID to Qase ID mapping
+                                                            field_copy['tr_key_to_qase_id'] = {}
+                                                            self.logger.log(f'[Fields] Creating mapping for project field {field_name_with_project} (qase_id: {qase_field.id})')
+                                                            self.logger.log(f'[Fields] TestRail values: {tr_values}')
+                                                            self.logger.log(f'[Fields] Qase values: {field_copy["qase_values"]}')
+                                                            
+                                                            for tr_key, tr_title in tr_values.items():
+                                                                for qase_id, qase_title in field_copy['qase_values'].items():
+                                                                    if tr_title.strip() == qase_title.strip():
+                                                                        field_copy['tr_key_to_qase_id'][tr_key] = qase_id
+                                                                        self.logger.log(f'[Fields] Mapped: TestRail {tr_key} ("{tr_title}") -> Qase ID {qase_id} ("{qase_title}")')
+                                                                        break
+                                                                else:
+                                                                    self.logger.log(f'[Fields] No match found for TestRail value {tr_key} ("{tr_title}")')
+                                                            
+                                                            self.logger.log(f'[Fields] Created TestRail to Qase mapping for project field {field_name_with_project}: {field_copy["tr_key_to_qase_id"]}')
                                             except (json.JSONDecodeError, AttributeError):
                                                 pass
                                 else:
@@ -550,11 +602,128 @@ class Fields:
         
         # Create TestRail ID to Qase ID mapping
         field['tr_key_to_qase_id'] = {}
+        self.logger.log(f'[Fields] Creating mapping for field {field["label"]} (qase_id: {field.get("qase_id")})')
+        self.logger.log(f'[Fields] TestRail values: {tr_values}')
+        self.logger.log(f'[Fields] Qase values: {field["qase_values"]}')
+        
         for tr_key, tr_title in tr_values.items():
             for qase_id, qase_title in field['qase_values'].items():
                 if tr_title.strip() == qase_title.strip():
                     field['tr_key_to_qase_id'][tr_key] = qase_id
-                    self.logger.log(f'[Fields] Created mapping: TestRail {tr_key} ({tr_title}) -> Qase ID {qase_id}')
+                    self.logger.log(f'[Fields] Mapped: TestRail {tr_key} ("{tr_title}") -> Qase ID {qase_id} ("{qase_title}")')
                     break
+            else:
+                self.logger.log(f'[Fields] No match found for TestRail value {tr_key} ("{tr_title}")')
         
         self.logger.log(f'[Fields] Created TestRail to Qase mapping for field {field["label"]}: {field["tr_key_to_qase_id"]}')
+
+    def _print_custom_fields_summary(self):
+        """Print detailed summary of all custom fields with their mappings"""
+        self.logger.divider()
+        self.logger.log('[Fields] ===== CUSTOM FIELDS SUMMARY =====')
+        
+        if not self.mappings.custom_fields:
+            self.logger.log('[Fields] No custom fields found')
+            return
+        
+        # Group fields by type for better organization
+        global_fields = []
+        project_fields = {}
+        
+        for field_name, field_data in self.mappings.custom_fields.items():
+            if '_' in field_name and any(project_code in field_name for project_code in self.mappings.project_map.values()):
+                # This is a project-specific field
+                project_code = field_name.split('_')[-1]
+                if project_code not in project_fields:
+                    project_fields[project_code] = []
+                project_fields[project_code].append((field_name, field_data))
+            else:
+                # This is a global field
+                global_fields.append((field_name, field_data))
+        
+        # Print global fields
+        if global_fields:
+            self.logger.log('[Fields] --- GLOBAL FIELDS ---')
+            for field_name, field_data in global_fields:
+                self._print_field_details(field_name, field_data, is_global=True)
+        
+        # Print project-specific fields
+        if project_fields:
+            self.logger.log('[Fields] --- PROJECT-SPECIFIC FIELDS ---')
+            for project_code in sorted(project_fields.keys()):
+                self.logger.log(f'[Fields] Project: {project_code}')
+                for field_name, field_data in project_fields[project_code]:
+                    self._print_field_details(field_name, field_data, is_global=False)
+        
+        self.logger.log('[Fields] ===== END SUMMARY =====')
+        self.logger.divider()
+
+    def _print_field_details(self, field_name, field_data, is_global=True):
+        """Print detailed information about a single field"""
+        field_type = "Global" if is_global else "Project"
+        
+        self.logger.log(f'[Fields] {field_type} Field: {field_data.get("label", field_name)}')
+        self.logger.log(f'[Fields]   ├─ Name: {field_name}')
+        self.logger.log(f'[Fields]   ├─ TestRail ID: {field_data.get("id", "N/A")}')
+        self.logger.log(f'[Fields]   ├─ Qase ID: {field_data.get("qase_id", "N/A")}')
+        self.logger.log(f'[Fields]   ├─ Type: {field_data.get("type_id", "N/A")} ({self.mappings.custom_fields_type.get(field_data.get("type_id"), "Unknown")})')
+        
+        # Print field values
+        if 'qase_values' in field_data and field_data['qase_values']:
+            self.logger.log(f'[Fields]   ├─ Qase Values:')
+            for qase_id, qase_title in field_data['qase_values'].items():
+                self.logger.log(f'[Fields]   │  ├─ {qase_id}: "{qase_title}"')
+        else:
+            self.logger.log(f'[Fields]   ├─ Qase Values: None')
+        
+        # Print TestRail values from configs
+        if 'configs' in field_data and field_data['configs']:
+            config = field_data['configs'][0]
+            if 'options' in config and 'items' in config['options']:
+                items = config['options']['items']
+                if items:
+                    self.logger.log(f'[Fields]   ├─ TestRail Values:')
+                    tr_values = {}
+                    for line in items.split('\n'):
+                        if ',' in line:
+                            key, title = line.split(',', 1)
+                            tr_values[key.strip()] = title.strip()
+                    
+                    for tr_key, tr_title in tr_values.items():
+                        self.logger.log(f'[Fields]   │  ├─ {tr_key}: "{tr_title}"')
+                else:
+                    self.logger.log(f'[Fields]   ├─ TestRail Values: None')
+            else:
+                self.logger.log(f'[Fields]   ├─ TestRail Values: None')
+        else:
+            self.logger.log(f'[Fields]   ├─ TestRail Values: None')
+        
+        # Print mapping
+        if 'tr_key_to_qase_id' in field_data and field_data['tr_key_to_qase_id']:
+            self.logger.log(f'[Fields]   └─ Mapping (TestRail → Qase):')
+            for tr_key, qase_id in field_data['tr_key_to_qase_id'].items():
+                tr_title = "Unknown"
+                qase_title = "Unknown"
+                
+                # Find TestRail title
+                if 'configs' in field_data and field_data['configs']:
+                    config = field_data['configs'][0]
+                    if 'options' in config and 'items' in config['options']:
+                        items = config['options']['items']
+                        if items:
+                            for line in items.split('\n'):
+                                if ',' in line:
+                                    key, title = line.split(',', 1)
+                                    if key.strip() == tr_key:
+                                        tr_title = title.strip()
+                                        break
+                
+                # Find Qase title
+                if 'qase_values' in field_data and field_data['qase_values']:
+                    qase_title = field_data['qase_values'].get(qase_id, "Unknown")
+                
+                self.logger.log(f'[Fields]      ├─ {tr_key} ("{tr_title}") → {qase_id} ("{qase_title}")')
+        else:
+            self.logger.log(f'[Fields]   └─ Mapping: None')
+        
+        self.logger.log(f'[Fields]')
