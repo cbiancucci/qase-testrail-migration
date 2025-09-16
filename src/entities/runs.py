@@ -303,5 +303,11 @@ class Runs:
             offset = offset + limit
             for test in tests['tests']:
                 if test['case_id']:
-                    cases_map[test['id']] = test['case_id']
+                    # Use case ID mapping if available
+                    qase_case_id = self.mappings.get_qase_case_id(test['case_id'])
+                    cases_map[test['id']] = qase_case_id
+                    if qase_case_id != test['case_id']:
+                        self.logger.log(f'[{self.project["code"]}][Runs] Mapped TestRail case ID {test["case_id"]} to Qase case ID {qase_case_id}')
+                    else:
+                        self.logger.log(f'[{self.project["code"]}][Runs] No mapping found for case ID {test["case_id"]}, using original ID')
         return cases_map

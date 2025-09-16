@@ -24,6 +24,9 @@ class Mappings:
 
         self.refs_id = None
         self.group_id = None
+        
+        # A map of TestRail case IDs to Qase case IDs for preserve_ids functionality
+        self.case_id_mapping = {}
 
         # A map of TestRail custom fields types to Qase custom fields types
         self.custom_fields_type = {
@@ -57,4 +60,22 @@ class Mappings:
     def get_user_id(self, id: int) -> int:
         if (id in self.users):
             return self.users[id]
-        return self.default_user  
+        return self.default_user
+
+    def get_case_id_mapping(self) -> dict:
+        """
+        Returns the mapping of original TestRail IDs to generated Qase IDs
+        """
+        return self.case_id_mapping
+
+    def add_case_id_mapping(self, testrail_id: int, qase_id: int) -> None:
+        """
+        Adds a mapping of TestRail case ID -> Qase case ID
+        """
+        self.case_id_mapping[testrail_id] = qase_id
+
+    def get_qase_case_id(self, testrail_id: int) -> int:
+        """
+        Returns the Qase case ID by TestRail ID
+        """
+        return self.case_id_mapping.get(testrail_id, testrail_id)  

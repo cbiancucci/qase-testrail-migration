@@ -1,6 +1,8 @@
 import asyncio
 import json
 import re
+import hashlib
+import time
 
 from ..service import QaseService, TestrailService
 from ..support import Logger, Mappings, ConfigManager as Config, Pools
@@ -12,6 +14,9 @@ from typing import List, Optional, Union
 
 from urllib.parse import quote
 from datetime import datetime
+
+# Constant for maximum safe ID (int32)
+MAX_SAFE_ID = 2**31 - 1  # 2,147,483,647
 
 
 class Cases:
@@ -50,10 +55,34 @@ class Cases:
             else:
                 tg.create_task(
                     self.import_cases_for_suite(None))  # Assuming None is a valid suite_id when suite_mode is not 3
+        
+        # Log statistics for ID mapping
+        if self.mappings.case_id_mapping:
+            self.logger.log(f'[{self.project["code"]}][Tests] Created {len(self.mappings.case_id_mapping)} ID mappings for cases')
+            if self.config.get('tests.preserve_ids'):
+                # If preserve_ids=true, save original IDs, but hash large ones
+                large_ids = [orig_id for orig_id in self.mappings.case_id_mapping.keys() if orig_id > MAX_SAFE_ID]
+                if large_ids:
+                    self.logger.log(f'[{self.project["code"]}][Tests] {len(large_ids)} cases had large IDs that were hashed for safety (preserve_ids=true)')
+                else:
+                    self.logger.log(f'[{self.project["code"]}][Tests] All case IDs were preserved from TestRail (preserve_ids=true)')
+            else:
+                # If preserve_ids=false, all IDs were regenerated
+                self.logger.log(f'[{self.project["code"]}][Tests] All case IDs were regenerated due to preserve_ids=false')
+            
+            # Check if all generated IDs are safe
+            unsafe_ids = [qase_id for qase_id in self.mappings.case_id_mapping.values() if qase_id > MAX_SAFE_ID]
+            if unsafe_ids:
+                self.logger.log(f'[{self.project["code"]}][Tests] WARNING: {len(unsafe_ids)} generated IDs are still too large! This should not happen.')
+            else:
+                self.logger.log(f'[{self.project["code"]}][Tests] All generated IDs are within safe range (≤ {MAX_SAFE_ID})')
+        else:
+            self.logger.log(f'[{self.project["code"]}][Tests] No ID mappings created')
 
     async def import_cases_for_suite(self, suite_id):
         offset = 0
-        limit = 100
+        # Set limit based on enterprise setting: 20 for enterprise, 100 for cloud
+        limit = 20 if self.config.get('qase.enterprise') else 100
         while True:
             count = await self.process_cases(suite_id, offset, limit)
             if count < limit:
@@ -73,6 +102,8 @@ class Cases:
                     f'[{self.project["code"]}][Tests] Importing {cases["size"]} cases from {offset} to {offset + limit} for suite {suite_id}')
                 data = await self._prepare_cases(cases)
                 if data:
+                    if self.config.get('qase.enterprise'):
+                        time.sleep(5)  # To avoid hitting rate limits
                     status = await self.pools.qs(self.qase.create_cases, self.project['code'], data)
                     if status:
                         self.mappings.stats.add_entity_count(self.project['code'], 'cases', 'qase', cases['size'])
@@ -95,8 +126,47 @@ class Cases:
 
     async def _prepare_case(self, case, result):
         try:
+            original_id = case['id']
+            
+            # Check preserve_ids setting
+            if self.config.get('tests.preserve_ids'):
+                # preserve_ids enabled - save original IDs from TestRail
+                if original_id <= MAX_SAFE_ID:  # ID fits in int32
+                    # Save original ID
+                    safe_id = int(original_id)
+                    self.logger.log(f'[{self.project["code"]}][Tests] preserve_ids enabled, using original ID: {safe_id} for case {case["title"]}')
+                else:
+                    # ID too large, but preserve_ids=true, so hash it
+                    hashed_id = int(hashlib.md5(str(original_id).encode()).hexdigest()[:8], 16)
+                    safe_id = hashed_id % MAX_SAFE_ID  # Limit hash to safe range
+                    self.logger.log(f'[{self.project["code"]}][Tests] preserve_ids enabled, original ID {original_id} too large, using hashed ID: {safe_id} for case {case["title"]}')
+            else:
+                # preserve_ids disabled - generate new IDs for all cases
+                if original_id <= MAX_SAFE_ID:  # ID fits in int32
+                    # Generate new ID even for small ones
+                    import time
+                    safe_id = int(time.time() * 1000) % MAX_SAFE_ID
+                    self.logger.log(f'[{self.project["code"]}][Tests] preserve_ids disabled, generated new ID: {safe_id} for case {case["title"]} (original: {original_id})')
+                else:
+                    # ID too large, hash it
+                    hashed_id = int(hashlib.md5(str(original_id).encode()).hexdigest()[:8], 16)
+                    safe_id = hashed_id % MAX_SAFE_ID  # Limit hash to safe range
+                    self.logger.log(f'[{self.project["code"]}][Tests] preserve_ids disabled, original ID {original_id} too large, using hashed ID: {safe_id} for case {case["title"]}')
+            
+            # Save mapping of original ID to generated (or same) ID
+            self.mappings.add_case_id_mapping(original_id, safe_id)
+            self.logger.log(f'[{self.project["code"]}][Tests] Created ID mapping: TestRail {original_id} -> Qase {safe_id}')
+            
+            # Additional safety check - all IDs must fit in int32
+            if safe_id > MAX_SAFE_ID:
+                # If ID is still too large, force it to safe range
+                safe_id = safe_id % MAX_SAFE_ID
+                self.logger.log(f'[{self.project["code"]}][Tests] WARNING: Generated ID was still too large, forced to safe range: {safe_id}')
+                # Update mapping
+                self.mappings.add_case_id_mapping(original_id, safe_id)
+            
             data = {
-                'id': int(case['id']),
+                'id': safe_id,
                 'title': case['title'],
                 'created_at': str(datetime.fromtimestamp(case['created_on'])),
                 'updated_at': str(datetime.fromtimestamp(case['updated_on'])),
@@ -106,6 +176,11 @@ class Cases:
                 'is_flaky': 0,
                 'custom_field': {},
             }
+            
+            # Save original ID in custom field if preserve_ids is enabled
+            if not self.config.get('tests.preserve_ids') and hasattr(self.mappings, 'testrail_original_id_field_id'):
+                data['custom_field'][str(self.mappings.testrail_original_id_field_id)] = str(original_id)
+                self.logger.log(f'[{self.project["code"]}][Tests] Stored original ID {original_id} in custom field for case {case["title"]}')
 
             # import custom fields
             data = self._import_custom_fields_for_case(case=case, data=data)
@@ -542,6 +617,12 @@ class Cases:
         formatted_text = url_pattern.sub(r'[\1](\1)', text)
 
         return formatted_text
+
+    def get_case_id_mapping(self) -> dict:
+        """
+        Returns the mapping of original TestRail IDs to generated Qase IDs
+        """
+        return self.mappings.case_id_mapping
 
     def __normalize_custom_field_name(self, field_name: str) -> str:
         """
