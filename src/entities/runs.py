@@ -2,7 +2,7 @@ import asyncio
 import math
 
 from ..service import QaseService, TestrailService
-from ..support import Logger, Mappings, ConfigManager as Config, Pools
+from ..support import Logger, Mappings, ConfigManager as Config, Pools, format_links_as_markdown
 from .attachments import Attachments
 
 from datetime import datetime
@@ -124,6 +124,10 @@ class Runs:
         self.logger.log(f'[{self.project["code"]}][Runs] Items in index: {str(len(self.index))}')
 
     async def _import_run(self, run: list) -> None:
+        # Format description with tables and links
+        if run.get('description'):
+            run['description'] = format_links_as_markdown(run['description'])
+        
         # Load testrail tests from the run ()
         cases_map = await self.__get_cases_for_run(run)
         self.logger.log(

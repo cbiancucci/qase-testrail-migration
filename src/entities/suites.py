@@ -1,7 +1,7 @@
 import asyncio
 
 from ..service import QaseService, TestrailService
-from ..support import Logger, Mappings, ConfigManager as Config, Pools
+from ..support import Logger, Mappings, ConfigManager as Config, Pools, format_links_as_markdown
 
 from .attachments import Attachments
 
@@ -101,6 +101,7 @@ class Suites:
     ):
         description = description if description else ""
         description = self.attachments.check_and_replace_attachments(description, qase_code)
+        description = format_links_as_markdown(description)
         parent_id = self.suites_map.get(parent_id, None) if parent_id else None
 
         self.suites_map[testrail_suite_id] = await self.pools.qs(

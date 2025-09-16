@@ -5,7 +5,7 @@ import hashlib
 import time
 
 from ..service import QaseService, TestrailService
-from ..support import Logger, Mappings, ConfigManager as Config, Pools
+from ..support import Logger, Mappings, ConfigManager as Config, Pools, format_links_as_markdown
 
 from qaseio.models import TestStepCreate, TestCasebulkCasesInner
 from .attachments import Attachments
@@ -335,7 +335,7 @@ class Cases:
                                         data['custom_field'][str(custom_field['qase_id'])] = str(value[0])
                                         self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} to value: {str(value[0])}')
                     else:
-                        field_value = self.__format_links_as_markdown(str(
+                        field_value = format_links_as_markdown(str(
                             self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
                         
                         # Special handling for preconds field - only set preconditions system field, skip custom field
@@ -344,7 +344,7 @@ class Cases:
                             self.logger.log(f'[{self.project["code"]}][Tests] Set preconds field value to preconditions system field (skipped custom field)')
                         else:
                             data['custom_field'][str(custom_field['qase_id'])] = field_value
-                            self.logger.log(f'[{self.project["code"]}][Tests] Set field {custom_field["name"]} to text value')
+                            self.logger.log(f'[{self.project["code"]}][Tests] Set field "{custom_field["name"]}" to value: "{field_value}"')
                             
                 # Fallback to original field name for backward compatibility
                 elif normalized_name in self.mappings.custom_fields and case[field_name]:
@@ -427,7 +427,7 @@ class Cases:
                             return None
                     else:
                         # Handle non-dropdown fields (text, number, etc.)
-                        field_value = self.__format_links_as_markdown(str(
+                        field_value = format_links_as_markdown(str(
                             self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
                         
                         # Special handling for preconds field - only set preconditions system field, skip custom field
@@ -462,7 +462,7 @@ class Cases:
                             action = 'No action'
                         steps.append(
                             TestStepCreate(
-                                action=self.__format_links_as_markdown(action),
+                                action=format_links_as_markdown(action),
                                 expected_result=None,
                                 position=i
                             )
@@ -491,9 +491,9 @@ class Cases:
                             action = 'No action'
                         steps.append(
                             TestStepCreate(
-                                action=self.__format_links_as_markdown(action),
-                                expected_result=self.__format_links_as_markdown(expected),
-                                data=self.__format_links_as_markdown(input_data),
+                                action=format_links_as_markdown(action),
+                                expected_result=format_links_as_markdown(expected),
+                                data=format_links_as_markdown(input_data),
                                 position=i
                             )
                         )
@@ -627,15 +627,7 @@ class Cases:
         return data
 
 
-    @staticmethod
-    def __format_links_as_markdown(text):
-        if text is None:
-            return None
 
-        url_pattern = re.compile(r'(?<!\]\()(?<!\])\b(http[s]?://[^\s]+)')
-        formatted_text = url_pattern.sub(r'[\1](\1)', text)
-
-        return formatted_text
 
     def get_case_id_mapping(self) -> dict:
         """
