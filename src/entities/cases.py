@@ -335,9 +335,16 @@ class Cases:
                                         data['custom_field'][str(custom_field['qase_id'])] = str(value[0])
                                         self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} to value: {str(value[0])}')
                     else:
-                        data['custom_field'][str(custom_field['qase_id'])] = self.__format_links_as_markdown(str(
+                        field_value = self.__format_links_as_markdown(str(
                             self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
-                        self.logger.log(f'[{self.project["code"]}][Tests] Set field {custom_field["name"]} to text value')
+                        
+                        # Special handling for preconds field - only set preconditions system field, skip custom field
+                        if normalized_name == 'preconds':
+                            data['preconditions'] = field_value
+                            self.logger.log(f'[{self.project["code"]}][Tests] Set preconds field value to preconditions system field (skipped custom field)')
+                        else:
+                            data['custom_field'][str(custom_field['qase_id'])] = field_value
+                            self.logger.log(f'[{self.project["code"]}][Tests] Set field {custom_field["name"]} to text value')
                             
                 # Fallback to original field name for backward compatibility
                 elif normalized_name in self.mappings.custom_fields and case[field_name]:
@@ -420,9 +427,16 @@ class Cases:
                             return None
                     else:
                         # Handle non-dropdown fields (text, number, etc.)
-                        data['custom_field'][str(custom_field['qase_id'])] = self.__format_links_as_markdown(str(
+                        field_value = self.__format_links_as_markdown(str(
                             self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
-                        self.logger.log(f'[{self.project["code"]}][Tests] Set global field {custom_field["name"]} to text value')
+                        
+                        # Special handling for preconds field - only set preconditions system field, skip custom field
+                        if normalized_name == 'preconds':
+                            data['preconditions'] = field_value
+                            self.logger.log(f'[{self.project["code"]}][Tests] Set preconds field value to preconditions system field (skipped custom field)')
+                        else:
+                            data['custom_field'][str(custom_field['qase_id'])] = field_value
+                            self.logger.log(f'[{self.project["code"]}][Tests] Set global field {custom_field["name"]} to text value')
                 else:
                     self.logger.log(f'[{self.project["code"]}][Tests] No field found for {normalized_name} or {project_specific_key}')
 
@@ -611,6 +625,7 @@ class Cases:
                 self.mappings.milestones[code]:
             data['milestone_id'] = self.mappings.milestones[code][case['milestone_id']]
         return data
+
 
     @staticmethod
     def __format_links_as_markdown(text):
