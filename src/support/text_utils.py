@@ -4,6 +4,7 @@ Contains functions for text formatting and conversion.
 """
 
 import re
+from datetime import datetime
 
 
 def convert_testrail_tables_to_markdown(text):
@@ -201,3 +202,49 @@ def fix_numbering(text):
             i += 1
     
     return '\n'.join(result_lines)
+
+
+def convert_testrail_date_to_iso(date_string):
+    """
+    Convert TestRail date format to ISO format for Qase datetime fields.
+    
+    TestRail formats supported:
+    - M/D/YYYY (e.g., "3/23/2023")
+    - MM/D/YYYY (e.g., "03/23/2023")
+    - M/DD/YYYY (e.g., "3/23/2023")
+    - MM/DD/YYYY (e.g., "03/23/2023")
+    
+    Output format: YYYY-MM-DD HH:MM:SS (e.g., "2023-03-23 00:00:00")
+    
+    Args:
+        date_string (str): Date string in TestRail format
+        
+    Returns:
+        str: Date string in ISO format, or original string if conversion fails
+    """
+    if not date_string or not isinstance(date_string, str):
+        return date_string
+    
+    # Remove any whitespace
+    date_string = date_string.strip()
+    
+    # Try different date formats
+    date_formats = [
+        '%m/%d/%Y',      # M/D/YYYY or MM/DD/YYYY
+        '%m/%d/%y',      # M/D/YY or MM/DD/YY
+        '%d/%m/%Y',      # D/M/YYYY or DD/MM/YYYY
+        '%d/%m/%y',      # D/M/YY or DD/MM/YY
+        '%Y-%m-%d',      # YYYY-MM-DD
+        '%Y/%m/%d',      # YYYY/MM/DD
+    ]
+    
+    for date_format in date_formats:
+        try:
+            parsed_date = datetime.strptime(date_string, date_format)
+            # Convert to ISO format with time set to 00:00:00
+            return parsed_date.strftime('%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            continue
+    
+    # If no format matches, return original string
+    return date_string

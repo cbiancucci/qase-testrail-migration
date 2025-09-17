@@ -5,7 +5,7 @@ import hashlib
 import time
 
 from ..service import QaseService, TestrailService
-from ..support import Logger, Mappings, ConfigManager as Config, Pools, format_links_as_markdown
+from ..support import Logger, Mappings, ConfigManager as Config, Pools, format_links_as_markdown, convert_testrail_date_to_iso
 
 from qaseio.models import TestStepCreate, TestCasebulkCasesInner
 from .attachments import Attachments
@@ -334,6 +334,12 @@ class Cases:
                                         # Fallback - use value directly without +1 offset
                                         data['custom_field'][str(custom_field['qase_id'])] = str(value[0])
                                         self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} to value: {str(value[0])}')
+                    elif custom_field['type_id'] == 8:
+                        # Handle datepicker fields (type 8) - convert TestRail date format to ISO format
+                        field_value = str(case[field_name])
+                        converted_date = convert_testrail_date_to_iso(field_value)
+                        data['custom_field'][str(custom_field['qase_id'])] = converted_date
+                        self.logger.log(f'[{self.project["code"]}][Tests] Set datepicker field "{custom_field["name"]}" to converted date: "{converted_date}" (original: "{field_value}")')
                     else:
                         field_value = format_links_as_markdown(str(
                             self.attachments.check_and_replace_attachments(case[field_name], self.project['code'])))
@@ -425,6 +431,12 @@ class Cases:
                         else:
                             self.logger.log(f'[{self.project["code"]}][Tests] Global field {custom_field["name"]} validation failed for value: {value}')
                             return None
+                    elif custom_field['type_id'] == 8:
+                        # Handle datepicker fields (type 8) - convert TestRail date format to ISO format
+                        field_value = str(case[field_name])
+                        converted_date = convert_testrail_date_to_iso(field_value)
+                        data['custom_field'][str(custom_field['qase_id'])] = converted_date
+                        self.logger.log(f'[{self.project["code"]}][Tests] Set global datepicker field "{custom_field["name"]}" to converted date: "{converted_date}" (original: "{field_value}")')
                     else:
                         # Handle non-dropdown fields (text, number, etc.)
                         field_value = format_links_as_markdown(str(

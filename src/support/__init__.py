@@ -4,7 +4,7 @@ from .mappings import Mappings
 from .stats import Stats
 from .pools import Pools
 from .throttled_pool import ThrottledThreadPoolExecutor
-from .text_utils import convert_testrail_tables_to_markdown, format_links_as_markdown
+from .text_utils import convert_testrail_tables_to_markdown, format_links_as_markdown, convert_testrail_date_to_iso
 
 __all__ = [
     "Pools",
@@ -15,4 +15,5 @@ __all__ = [
     "ThrottledThreadPoolExecutor",
     "convert_testrail_tables_to_markdown",
     "format_links_as_markdown",
+    "convert_testrail_date_to_iso",
 ]
