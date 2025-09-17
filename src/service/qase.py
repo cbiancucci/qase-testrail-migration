@@ -1,4 +1,4 @@
-from ..support import ConfigManager, Logger
+from ..support import ConfigManager, Logger, format_links_as_markdown
 
 import certifi
 import json
@@ -367,7 +367,7 @@ class QaseService:
                             "case_id": cases_map[result['test_id']],
                             "status": status,
                             "time_ms": elapsed*1000,  # converting to milliseconds
-                            "comment": str(result['comment'])
+                            "comment": format_links_as_markdown(str(result['comment']))
                         }
 
                         if 'attachments' in result and len(result['attachments']) > 0:
