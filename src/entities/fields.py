@@ -422,6 +422,36 @@ class Fields:
                                     values = json.loads(qase_field.value)
                                     for value in values:
                                         field_copy['qase_values'][value['id']] = value['title']
+                                
+                                # Create TestRail ID to Qase ID mapping for existing fields
+                                if 'configs' in field_copy and len(field_copy['configs']) > 0:
+                                    config = field_copy['configs'][0]
+                                    if 'options' in config and 'items' in config['options']:
+                                        items = config['options']['items']
+                                        if items:
+                                            # Parse items string into TestRail ID mapping
+                                            tr_values = {}
+                                            for line in items.split('\n'):
+                                                if ',' in line:
+                                                    key, title = line.split(',', 1)
+                                                    tr_values[key.strip()] = title.strip()
+                                            
+                                            # Create TestRail ID to Qase ID mapping
+                                            field_copy['tr_key_to_qase_id'] = {}
+                                            self.logger.log(f'[Fields] Creating mapping for existing project field {field_copy["label"]} (qase_id: {qase_field.id})')
+                                            self.logger.log(f'[Fields] TestRail values: {tr_values}')
+                                            self.logger.log(f'[Fields] Qase values: {field_copy["qase_values"]}')
+                                            
+                                            for tr_key, tr_title in tr_values.items():
+                                                for qase_id, qase_title in field_copy['qase_values'].items():
+                                                    if tr_title.strip() == qase_title.strip():
+                                                        field_copy['tr_key_to_qase_id'][tr_key] = qase_id
+                                                        self.logger.log(f'[Fields] Mapped: TestRail {tr_key} ("{tr_title}") -> Qase ID {qase_id} ("{qase_title}")')
+                                                        break
+                                                else:
+                                                    self.logger.log(f'[Fields] No match found for TestRail value {tr_key} ("{tr_title}")')
+                                            
+                                            self.logger.log(f'[Fields] Created TestRail to Qase mapping for existing project field {field_copy["label"]}: {field_copy["tr_key_to_qase_id"]}')
                             field_copy['qase_id'] = qase_field.id
                             # Store field mapping with project-specific key
                             self.mappings.custom_fields[f"{field['name']}_{project_code}"] = field_copy
