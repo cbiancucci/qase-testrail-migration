@@ -248,3 +248,202 @@ def convert_testrail_date_to_iso(date_string):
     
     # If no format matches, return original string
     return date_string
+
+
+def convert_estimate_time_to_hours(estimate_string):
+    """
+    Convert TestRail estimate time format to simplified format.
+    
+    TestRail API returns detailed format like: '1wk 1d 1hr 1min 1sec'
+    We need to return simplified format like: '1 week 1 day'
+    
+    Conversion rules:
+    - Take only the first two time units from the estimate
+    - Apply rounding to the values
+    - Return in simplified format (not converted to hours)
+    
+    Examples:
+    - "1wk 1d 1hr 1min 1sec" -> "1 week 1 day"
+    - "1d 3h 50m" -> "1 day 4 hour" (3h + 50m rounds to 4h)
+    - "1hr 1min 1sec" -> "1 hour 1 minute"
+    - "2wk 3d 2hr 30min" -> "2 week 3 day"
+    
+    Args:
+        estimate_string (str): Estimate string in TestRail API format
+        
+    Returns:
+        str: Simplified estimate format, or original string if conversion fails
+    """
+    if not estimate_string or not isinstance(estimate_string, str):
+        return estimate_string
+    
+    # Remove any whitespace
+    estimate_string = estimate_string.strip()
+    
+    if not estimate_string:
+        return estimate_string
+    
+    # Parse the estimate string to extract time units
+    import re
+    import math
+    
+    # Pattern to match number + unit pairs
+    pattern = r'(\d+(?:\.\d+)?)\s*(wk|week|d|day|hr|hour|h|min|minute|m|sec|second)s?'
+    matches = re.findall(pattern, estimate_string, re.IGNORECASE)
+    
+    if not matches:
+        # If no matches found, return original string
+        return estimate_string
+    
+    # Take the first two time units, but handle special cases
+    first_two_units = matches[:2]
+    
+    # Special case: if we have "1d 3h 50m", we need to take days and combine hours+minutes
+    if len(matches) >= 3:
+        first_unit = matches[0][1].lower()
+        second_unit = matches[1][1].lower()
+        third_unit = matches[2][1].lower()
+        
+        # If first is days, second is hours, third is minutes, combine hours+minutes
+        if (first_unit in ['d', 'day'] and 
+            second_unit in ['hr', 'hour', 'h'] and 
+            third_unit in ['min', 'minute', 'm']):
+            try:
+                days = float(matches[0][0])
+                hours = float(matches[1][0])
+                minutes = float(matches[2][0])
+                
+                result_parts = []
+                
+                # Round days
+                rounded_days = math.ceil(days)
+                if rounded_days > 0:
+                    result_parts.append(f"{rounded_days} day{'s' if rounded_days != 1 else ''}")
+                
+                # Combine hours and minutes
+                total_hours = hours + (minutes / 60)
+                rounded_hours = math.ceil(total_hours)
+                if rounded_hours > 0:
+                    result_parts.append(f"{rounded_hours} hour{'s' if rounded_hours != 1 else ''}")
+                
+                # Return early for this special case
+                if result_parts:
+                    return ' '.join(result_parts)
+                else:
+                    return estimate_string
+            except ValueError:
+                pass
+    
+    result_parts = []
+    
+    # Special handling for hours + minutes combination
+    if len(first_two_units) == 2:
+        first_value_str, first_unit = first_two_units[0]
+        second_value_str, second_unit = first_two_units[1]
+        
+        first_unit_lower = first_unit.lower()
+        second_unit_lower = second_unit.lower()
+        
+        # If first is hours and second is minutes, combine them only if minutes are significant
+        if (first_unit_lower in ['hr', 'hour', 'h'] and second_unit_lower in ['min', 'minute', 'm']):
+            try:
+                hours = float(first_value_str)
+                minutes = float(second_value_str)
+                
+                # Only combine if minutes are >= 30 (significant)
+                if minutes >= 30:
+                    # Convert minutes to hours and add to hours
+                    total_hours = hours + (minutes / 60)
+                    rounded_hours = math.ceil(total_hours)
+                    
+                    if rounded_hours > 0:
+                        result_parts.append(f"{rounded_hours} hour{'s' if rounded_hours != 1 else ''}")
+                else:
+                    # Just use hours without combining
+                    rounded_hours = math.ceil(hours)
+                    if rounded_hours > 0:
+                        result_parts.append(f"{rounded_hours} hour{'s' if rounded_hours != 1 else ''}")
+            except ValueError:
+                pass
+        # Special handling for days + hours combination (like "1d 3h 50m")
+        elif (first_unit_lower in ['d', 'day'] and second_unit_lower in ['hr', 'hour', 'h']):
+            try:
+                days = float(first_value_str)
+                hours = float(second_value_str)
+                
+                # Round days
+                rounded_days = math.ceil(days)
+                if rounded_days > 0:
+                    result_parts.append(f"{rounded_days} day{'s' if rounded_days != 1 else ''}")
+                
+                # Round hours
+                rounded_hours = math.ceil(hours)
+                if rounded_hours > 0:
+                    result_parts.append(f"{rounded_hours} hour{'s' if rounded_hours != 1 else ''}")
+            except ValueError:
+                pass
+        else:
+            # Regular processing for other combinations
+            for value_str, unit in first_two_units:
+                try:
+                    value = float(value_str)
+                    unit_lower = unit.lower()
+                    
+                    # Apply rounding to individual values
+                    rounded_value = math.ceil(value)
+                    
+                    # Skip zero values
+                    if rounded_value == 0:
+                        continue
+                    
+                    # Convert to full word format
+                    if unit_lower in ['wk', 'week']:
+                        result_parts.append(f"{rounded_value} week{'s' if rounded_value != 1 else ''}")
+                    elif unit_lower in ['d', 'day']:
+                        result_parts.append(f"{rounded_value} day{'s' if rounded_value != 1 else ''}")
+                    elif unit_lower in ['hr', 'hour', 'h']:
+                        result_parts.append(f"{rounded_value} hour{'s' if rounded_value != 1 else ''}")
+                    elif unit_lower in ['min', 'minute', 'm']:
+                        result_parts.append(f"{rounded_value} minute{'s' if rounded_value != 1 else ''}")
+                    elif unit_lower in ['sec', 'second']:
+                        result_parts.append(f"{rounded_value} second{'s' if rounded_value != 1 else ''}")
+                            
+                except (ValueError, KeyError):
+                    # Skip invalid values or units
+                    continue
+    else:
+        # Single unit processing
+        for value_str, unit in first_two_units:
+            try:
+                value = float(value_str)
+                unit_lower = unit.lower()
+                
+                # Apply rounding to individual values
+                rounded_value = math.ceil(value)
+                
+                # Skip zero values
+                if rounded_value == 0:
+                    continue
+                
+                # Convert to full word format
+                if unit_lower in ['wk', 'week']:
+                    result_parts.append(f"{rounded_value} week{'s' if rounded_value != 1 else ''}")
+                elif unit_lower in ['d', 'day']:
+                    result_parts.append(f"{rounded_value} day{'s' if rounded_value != 1 else ''}")
+                elif unit_lower in ['hr', 'hour', 'h']:
+                    result_parts.append(f"{rounded_value} hour{'s' if rounded_value != 1 else ''}")
+                elif unit_lower in ['min', 'minute', 'm']:
+                    result_parts.append(f"{rounded_value} minute{'s' if rounded_value != 1 else ''}")
+                elif unit_lower in ['sec', 'second']:
+                    result_parts.append(f"{rounded_value} second{'s' if rounded_value != 1 else ''}")
+                        
+            except (ValueError, KeyError):
+                # Skip invalid values or units
+                continue
+    
+    # Return the result
+    if result_parts:
+        return ' '.join(result_parts)
+    else:
+        # If no valid conversion, return original string
+        return estimate_string

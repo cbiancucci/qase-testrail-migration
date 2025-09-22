@@ -5,7 +5,7 @@ import hashlib
 import time
 
 from ..service import QaseService, TestrailService
-from ..support import Logger, Mappings, ConfigManager as Config, Pools, format_links_as_markdown, convert_testrail_date_to_iso
+from ..support import Logger, Mappings, ConfigManager as Config, Pools, format_links_as_markdown, convert_testrail_date_to_iso, convert_estimate_time_to_hours
 
 from qaseio.models import TestStepCreate, TestCasebulkCasesInner
 from .attachments import Attachments
@@ -192,6 +192,7 @@ class Cases:
             data = self._set_suite(case=case, data=data)
             data = self._set_refs(case=case, data=data)
             data = self._set_milestone(case=case, data=data, code=self.project['code'])
+            data = self._set_estimate(case=case, data=data)
 
             result.append(
                 TestCasebulkCasesInner(
@@ -636,6 +637,21 @@ class Cases:
         if case['milestone_id'] and code in self.mappings.milestones and case['milestone_id'] in \
                 self.mappings.milestones[code]:
             data['milestone_id'] = self.mappings.milestones[code][case['milestone_id']]
+        return data
+
+    def _set_estimate(self, case: dict, data: dict) -> dict:
+        """Set estimate field with converted time value"""
+        if hasattr(self.mappings, 'estimate_field_id') and self.mappings.estimate_field_id:
+            # Check if case has estimate field
+            if 'estimate' in case and case['estimate']:
+                # Convert estimate time to hours
+                converted_estimate = convert_estimate_time_to_hours(case['estimate'])
+                data['custom_field'][str(self.mappings.estimate_field_id)] = converted_estimate
+                self.logger.log(f'[{self.project["code"]}][Tests] Set estimate field to: "{converted_estimate}" (original: "{case["estimate"]}")')
+            else:
+                self.logger.log(f'[{self.project["code"]}][Tests] Case {case["title"]} has no estimate value')
+        else:
+            self.logger.log(f'[{self.project["code"]}][Tests] Estimate field not available in mappings')
         return data
 
 

@@ -431,14 +431,14 @@ class QaseService:
         try:
             components = time_str.split()
             for component in components:
-                if component.endswith('d'):
-                    total_seconds += int(component[:-1]) * 86400  # 60 seconds * 60 minutes * 24 hours
-                elif component.endswith('h'):
-                    total_seconds += int(component[:-1]) * 3600  # 60 seconds * 60 minutes
-                elif component.endswith('m'):
-                    total_seconds += int(component[:-1]) * 60
-                elif component.endswith('s'):
-                    total_seconds += int(component[:-1])
+                if component.endswith('day'):
+                    total_seconds += int(component[:-3]) * 86400  # 60 seconds * 60 minutes * 24 hours
+                elif component.endswith('hr'):
+                    total_seconds += int(component[:-2]) * 3600  # 60 seconds * 60 minutes
+                elif component.endswith('min'):
+                    total_seconds += int(component[:-3]) * 60
+                elif component.endswith('sec'):
+                    total_seconds += int(component[:-3])
         except Exception as e:
             self.logger.log(f'Exception when converting time string \'{time_str}\': {e}', 'warning')
 
