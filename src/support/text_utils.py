@@ -259,12 +259,13 @@ def convert_estimate_time_to_hours(estimate_string):
     
     Conversion rules:
     - Take only the first two time units from the estimate
-    - Apply rounding to the values
+    - For first two values: keep them separate without combining
+    - Apply rounding only if there are more than 2 values
     - Return in simplified format (not converted to hours)
     
     Examples:
     - "1wk 1d 1hr 1min 1sec" -> "1 week 1 day"
-    - "1d 3h 50m" -> "1 day 4 hour" (3h + 50m rounds to 4h)
+    - "5hr 30min" -> "5 hours 30 minutes" (keep separate)
     - "1hr 1min 1sec" -> "1 hour 1 minute"
     - "2wk 3d 2hr 30min" -> "2 week 3 day"
     
@@ -344,25 +345,20 @@ def convert_estimate_time_to_hours(estimate_string):
         first_unit_lower = first_unit.lower()
         second_unit_lower = second_unit.lower()
         
-        # If first is hours and second is minutes, combine them only if minutes are significant
+        # If first is hours and second is minutes, keep them separate for first two values
         if (first_unit_lower in ['hr', 'hour', 'h'] and second_unit_lower in ['min', 'minute', 'm']):
             try:
                 hours = float(first_value_str)
                 minutes = float(second_value_str)
                 
-                # Only combine if minutes are >= 30 (significant)
-                if minutes >= 30:
-                    # Convert minutes to hours and add to hours
-                    total_hours = hours + (minutes / 60)
-                    rounded_hours = math.ceil(total_hours)
-                    
-                    if rounded_hours > 0:
-                        result_parts.append(f"{rounded_hours} hour{'s' if rounded_hours != 1 else ''}")
-                else:
-                    # Just use hours without combining
-                    rounded_hours = math.ceil(hours)
-                    if rounded_hours > 0:
-                        result_parts.append(f"{rounded_hours} hour{'s' if rounded_hours != 1 else ''}")
+                # For first two values, keep them separate without rounding
+                rounded_hours = math.ceil(hours)
+                rounded_minutes = math.ceil(minutes)
+                
+                if rounded_hours > 0:
+                    result_parts.append(f"{rounded_hours} hour{'s' if rounded_hours != 1 else ''}")
+                if rounded_minutes > 0:
+                    result_parts.append(f"{rounded_minutes} minute{'s' if rounded_minutes != 1 else ''}")
             except ValueError:
                 pass
         # Special handling for days + hours combination (like "1d 3h 50m")
