@@ -431,7 +431,7 @@ class Cases:
                                         self.logger.log(f'[{self.project["code"]}][Tests] Set single select field {custom_field["name"]} to value: {str(value[0])}')
                         else:
                             self.logger.log(f'[{self.project["code"]}][Tests] Global field {custom_field["name"]} validation failed for value: {value}')
-                            return None
+                            return data
                     elif custom_field['type_id'] == 8:
                         # Handle datepicker fields (type 8) - convert TestRail date format to ISO format
                         field_value = str(case[field_name])
