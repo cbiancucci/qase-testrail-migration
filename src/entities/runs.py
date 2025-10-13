@@ -257,7 +257,7 @@ class Runs:
 
     async def _import_results(self, tr_run, qase_run_id, cases_map, results) -> None:
         await self.pools.qs(
-            self.qase.send_bulk_results,
+            self.qase.send_bulk_results_v2,
             tr_run,
             results,
             qase_run_id,

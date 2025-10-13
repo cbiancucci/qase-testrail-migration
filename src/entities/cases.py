@@ -7,7 +7,7 @@ import time
 from ..service import QaseService, TestrailService
 from ..support import Logger, Mappings, ConfigManager as Config, Pools, format_links_as_markdown, convert_testrail_date_to_iso, convert_estimate_time_to_hours
 
-from qaseio.models import TestStepCreate, TestCasebulkCasesInner
+from qase.api_client_v1.models import TestStepCreate, TestCasebulkCasesInner
 from .attachments import Attachments
 
 from typing import List, Optional, Union

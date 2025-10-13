@@ -3,26 +3,39 @@ from ..support import ConfigManager, Logger, format_links_as_markdown
 import certifi
 import json
 
-from qaseio.api_client import ApiClient
-from qaseio.configuration import Configuration
-from qaseio.api.authors_api import AuthorsApi
-from qaseio.api.custom_fields_api import CustomFieldsApi
-from qaseio.api.system_fields_api import SystemFieldsApi
-from qaseio.api.projects_api import ProjectsApi
-from qaseio.api.suites_api import SuitesApi
-from qaseio.api.cases_api import CasesApi
-from qaseio.api.runs_api import RunsApi
-from qaseio.api.results_api import ResultsApi
-from qaseio.api.attachments_api import AttachmentsApi
-from qaseio.api.milestones_api import MilestonesApi
-from qaseio.api.configurations_api import ConfigurationsApi
-from qaseio.api.shared_steps_api import SharedStepsApi
 
-from qaseio.models import TestCasebulk, SuiteCreate, MilestoneCreate, CustomFieldCreate, CustomFieldCreateValueInner, ProjectCreate, RunCreate, ResultcreateBulk, ConfigurationCreate, ConfigurationGroupCreate, SharedStepCreate, SharedStepContentCreate
+from qase.api_client_v1.api_client import ApiClient
+from qase.api_client_v1.configuration import Configuration
+from qase.api_client_v1.api.authors_api import AuthorsApi
+from qase.api_client_v1.api.custom_fields_api import CustomFieldsApi
+from qase.api_client_v1.api.system_fields_api import SystemFieldsApi
+from qase.api_client_v1.api.projects_api import ProjectsApi
+from qase.api_client_v1.api.suites_api import SuitesApi
+from qase.api_client_v1.api.cases_api import CasesApi
+from qase.api_client_v1.api.runs_api import RunsApi
+from qase.api_client_v1.api.results_api import ResultsApi
+from qase.api_client_v1.api.attachments_api import AttachmentsApi
+from qase.api_client_v1.api.milestones_api import MilestonesApi
+from qase.api_client_v1.api.configurations_api import ConfigurationsApi
+from qase.api_client_v1.api.shared_steps_api import SharedStepsApi
+
+from qase.api_client_v1.models import TestCasebulk, SuiteCreate, MilestoneCreate, CustomFieldCreate, CustomFieldCreateValueInner, ProjectCreate, RunCreate, ResultCreateBulk, ConfigurationCreate, ConfigurationGroupCreate, SharedStepCreate, SharedStepContentCreate
+
+# Import for new API v2 client
+from qase.api_client_v2.api_client import ApiClient as ApiClientV2
+from qase.api_client_v2.configuration import Configuration as ConfigurationV2
+from qase.api_client_v2.api.results_api import ResultsApi as ResultsApiV2
+from qase.api_client_v2.models.create_results_request_v2 import CreateResultsRequestV2
+from qase.api_client_v2.models.result_create import ResultCreate as ResultCreateV2
+from qase.api_client_v2.models.result_execution import ResultExecution
+from qase.api_client_v2.models.result_step import ResultStep
+from qase.api_client_v2.models.result_step_data import ResultStepData
+from qase.api_client_v2.models.result_step_execution import ResultStepExecution
+from qase.api_client_v2.models.result_step_status import ResultStepStatus
 
 from datetime import datetime
 
-from qaseio.exceptions import ApiException
+from qase.api_client_v1.exceptions import ApiException
 
 
 class QaseService:
@@ -33,7 +46,7 @@ class QaseService:
         ssl = 'http://'
         if config.get('qase.ssl') is None or config.get('qase.ssl'):
             ssl = 'https://'
-
+        
         delimiter = '.'
         if config.get('qase.enterprise') is not None and config.get('qase.enterprise'):
             delimiter = '-'
@@ -44,6 +57,18 @@ class QaseService:
         configuration.ssl_ca_cert = certifi.where()
 
         self.client = ApiClient(configuration)
+        
+        # Initialize API v2 client with minimal configuration to avoid SSL issues
+        configuration_v2 = ConfigurationV2()
+        configuration_v2.api_key['TokenAuth'] = config.get('qase.api_token')
+        configuration_v2.host = f'{ssl}api{delimiter}{config.get("qase.host")}/v2'
+        configuration_v2.ssl_ca_cert = certifi.where()
+        
+        # Create client with minimal configuration
+        self.client_v2 = ApiClientV2(configuration_v2)
+        
+        # Add custom header for migration
+        self.client_v2.default_headers['migration'] = 'true'
 
     def _get_users(self, limit=100, offset=0):
         try:
@@ -394,7 +419,7 @@ class QaseService:
                     api_results.create_result_bulk(
                         code=qase_code,
                         id=int(qase_run_id),
-                        resultcreate_bulk=ResultcreateBulk(
+                        result_create_bulk=ResultCreateBulk(
                             results=res
                         )
                     )
@@ -402,6 +427,94 @@ class QaseService:
                 except Exception as e:
                     self.logger.log(f'Exception when calling ResultsApi->create_result_bulk: {e}', 'error')
                     self.logger.log('Data being sent to API: %s' % json.dumps(res, indent=2, default=str), 'error')
+
+    def send_bulk_results_v2(self, tr_run, results, qase_run_id, qase_code, mappings, cases_map):
+        """
+        Send bulk results using Qase API v2
+        
+        This method uses the new qase-api-v2-client package and provides
+        improved functionality for sending test results to Qase.
+        
+        Args:
+            tr_run: TestRail run data
+            results: List of test results from TestRail
+            qase_run_id: Qase run ID
+            qase_code: Qase project code
+            mappings: Status mappings
+            cases_map: Mapping of TestRail case IDs to Qase case IDs
+        """
+        res = []
+
+        if results:
+            for result in results:
+                if result['status_id'] != 3:  # Skip untested status
+
+                    elapsed = 0
+                    if 'elapsed' in result and result['elapsed']:
+                        if type(result['elapsed']) is str:
+                            elapsed = self.convert_to_seconds(result['elapsed'])
+                        else:
+                            elapsed = int(result['elapsed'])
+
+                    if 'created_on' in result and result['created_on']:
+                        start_time = result['created_on'] - elapsed
+                        if start_time < tr_run['created_on']:
+                            start_time = tr_run['created_on']
+                    else:
+                        start_time = tr_run['created_on']
+
+                    if result['test_id'] in cases_map:
+                        status = 'skipped'
+                        if ("status_id" in result
+                            and result["status_id"] is not None
+                                and result["status_id"] in mappings.result_statuses
+                            and mappings.result_statuses[result["status_id"]]
+                            ):
+                            status = mappings.result_statuses[result["status_id"]]
+                        
+                        # Create ResultExecution object
+                        execution = ResultExecution(
+                            status=status,
+                            duration=elapsed * 1000,  # converting to milliseconds
+                            start_time=start_time,
+                            end_time=start_time + elapsed if start_time else None
+                        )
+
+                        # Create ResultCreate object
+                        result_data = ResultCreateV2(
+                            title=f"Test result for case {result['test_id']}",  # You might want to get actual case title
+                            testops_id=cases_map[result['test_id']],
+                            execution=execution,
+                            message=format_links_as_markdown(str(result['comment'])) if result.get('comment') else None
+                        )
+
+                        # Handle attachments
+                        if 'attachments' in result and len(result['attachments']) > 0:
+                            result_data.attachments = result['attachments']
+
+                        # Handle custom step results
+                        if 'custom_step_results' in result and result['custom_step_results']:
+                            result_data.steps = self.prepare_result_steps_v2(result['custom_step_results'], mappings.result_statuses)
+
+                        res.append(result_data)
+
+            if len(res) > 0:
+                api_results = ResultsApiV2(self.client_v2)
+                self.logger.log(f'Model: {json.dumps(res, indent=2, default=str)}')
+                self.logger.log(f'Sending {len(res)} results to Qase using API v2')
+                try:
+                    # Create bulk request
+                    bulk_request = CreateResultsRequestV2(results=res)
+                    
+                    api_results.create_results_v2(
+                        project_code=qase_code,
+                        run_id=int(qase_run_id),
+                        create_results_request_v2=bulk_request
+                    )
+                    self.logger.log(f'{len(res)} results sent to Qase using API v2')
+                except Exception as e:
+                    self.logger.log(f'Exception when calling ResultsApiV2->create_results_v2: {e}', 'error')
+                    self.logger.log('Data being sent to API: %s' % json.dumps([r.to_dict() for r in res], indent=2, default=str), 'error')
 
     def prepare_result_steps(self, steps, status_map) -> list:
         allowed_statuses = ['passed', 'failed', 'blocked', 'skipped']
@@ -424,6 +537,48 @@ class QaseService:
             self.logger.log(f'Exception when preparing result steps: {e}', 'error')
 
         return data
+
+    def prepare_result_steps_v2(self, steps, status_map) -> list:
+        """
+        Prepare result steps for API v2 using new ResultStep model
+        """
+        result_steps = []
+        try:
+            for step in steps:
+                status_str = status_map.get(str(step.get('status_id')), 'skipped')
+                
+                # Map status to ResultStepStatus enum
+                status_mapping = {
+                    'passed': ResultStepStatus.PASSED,
+                    'failed': ResultStepStatus.FAILED,
+                    'blocked': ResultStepStatus.BLOCKED,
+                    'skipped': ResultStepStatus.SKIPPED
+                }
+                step_status = status_mapping.get(status_str, ResultStepStatus.SKIPPED)
+
+                # Create step execution
+                step_execution = ResultStepExecution(
+                    status=step_status,
+                    comment=step.get('actual', '').strip() if step.get('actual') else None
+                )
+
+                # Create step data (action and expected result)
+                step_data = ResultStepData(
+                    action=step.get('content', 'No action').strip() if step.get('content') else 'No action',
+                    expected_result=step.get('expected', '').strip() if step.get('expected') else None
+                )
+
+                # Create ResultStep
+                result_step = ResultStep(
+                    data=step_data,
+                    execution=step_execution
+                )
+
+                result_steps.append(result_step)
+        except Exception as e:
+            self.logger.log(f'Exception when preparing result steps v2: {e}', 'error')
+
+        return result_steps
 
     def convert_to_seconds(self, time_str: str) -> int:
         total_seconds = 0

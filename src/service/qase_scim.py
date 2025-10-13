@@ -2,7 +2,7 @@ from ..support import ConfigManager, Logger
 
 from ..api import QaseScimClient
 
-from qaseio.exceptions import ApiException
+from qase.api_client_v1.exceptions import ApiException
 from ..exceptions import ImportException
 
 
