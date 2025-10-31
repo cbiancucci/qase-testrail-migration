@@ -159,6 +159,9 @@ class Runs:
         while True:
             self.logger.log(f'[{self.project["code"]}][Runs] Fetching results for the run {run["name"]} [{run["id"]}]')
             results = await self.pools.tr(self.testrail.get_results, run['id'], limit, offset)
+            if results is None:
+                self.logger.log(f'[{self.project["code"]}][Runs] Failed to fetch results for run {run["name"]} [{run["id"]}]', 'error')
+                break
             run_results = run_results + self._clean_results(results['results'])
             offset = offset + limit
             if results['size'] < limit:
